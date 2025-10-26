@@ -7,6 +7,8 @@ import (
 
         "github.com/ClickHouse/clickhouse-go/v2"
         "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+        "github.com/ctolnik/Office-Monitor/zapctx"
+        "go.uber.org/zap"
 )
 
 type Database struct {
@@ -41,9 +43,30 @@ func (db *Database) InsertActivityEvent(ctx context.Context, event ActivityEvent
         query := `INSERT INTO monitoring.activity_events 
                 (timestamp, computer_name, username, window_title, process_name, duration)
                 VALUES (?, ?, ?, ?, ?, ?)`
-        return db.conn.Exec(ctx, query,
+        
+        start := time.Now()
+        err := db.conn.Exec(ctx, query,
                 event.Timestamp, event.ComputerName, event.Username,
                 event.WindowTitle, event.ProcessName, event.Duration)
+        
+        duration := time.Since(start)
+        if err != nil {
+                zapctx.Error(ctx, "Failed to insert activity event to ClickHouse",
+                        zap.Error(err),
+                        zap.Duration("duration", duration),
+                        zap.String("computer_name", event.ComputerName),
+                )
+                return err
+        }
+        
+        if duration > 100*time.Millisecond {
+                zapctx.Warn(ctx, "Slow INSERT query detected",
+                        zap.Duration("duration", duration),
+                        zap.String("table", "activity_events"),
+                )
+        }
+        
+        return nil
 }
 
 func (db *Database) InsertUSBEvent(ctx context.Context, event USBEvent) error {
@@ -116,8 +139,13 @@ func (db *Database) GetActiveEmployees(ctx context.Context) ([]Employee, error) 
                 GROUP BY computer_name, username
                 ORDER BY last_seen DESC`
 
+        start := time.Now()
         rows, err := db.conn.Query(ctx, query)
         if err != nil {
+                zapctx.Error(ctx, "Failed to query active employees",
+                        zap.Error(err),
+                        zap.Duration("duration", time.Since(start)),
+                )
                 return nil, err
         }
         defer rows.Close()
@@ -141,6 +169,15 @@ func (db *Database) GetActiveEmployees(ctx context.Context) ([]Employee, error) 
                 employees = append(employees, e)
         }
 
+        duration := time.Since(start)
+        if duration > 200*time.Millisecond {
+                zapctx.Warn(ctx, "Slow SELECT query detected",
+                        zap.Duration("duration", duration),
+                        zap.String("table", "activity_events"),
+                        zap.Int("result_count", len(employees)),
+                )
+        }
+        
         return employees, rows.Err()
 }
 
@@ -150,8 +187,14 @@ func (db *Database) GetRecentActivity(ctx context.Context, limit int) ([]Activit
                 ORDER BY timestamp DESC
                 LIMIT ?`
 
+        start := time.Now()
         rows, err := db.conn.Query(ctx, query, limit)
         if err != nil {
+                zapctx.Error(ctx, "Failed to query recent activity",
+                        zap.Error(err),
+                        zap.Duration("duration", time.Since(start)),
+                        zap.Int("limit", limit),
+                )
                 return nil, err
         }
         defer rows.Close()
@@ -166,6 +209,16 @@ func (db *Database) GetRecentActivity(ctx context.Context, limit int) ([]Activit
                 events = append(events, e)
         }
 
+        duration := time.Since(start)
+        if duration > 200*time.Millisecond {
+                zapctx.Warn(ctx, "Slow SELECT query detected",
+                        zap.Duration("duration", duration),
+                        zap.String("table", "activity_events"),
+                        zap.Int("limit", limit),
+                        zap.Int("result_count", len(events)),
+                )
+        }
+        
         return events, rows.Err()
 }
 

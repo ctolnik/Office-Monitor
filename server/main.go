@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -11,9 +9,11 @@ import (
 	"github.com/ctolnik/Office-Monitor/server/database"
 	"github.com/ctolnik/Office-Monitor/zapctx"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 var (
@@ -25,11 +25,8 @@ var (
 func main() {
 	var err error
 
-	// logger, error := zap.NewProduction()
-	logger, error := zap.NewDevelopment()
-	if error != nil {
-		log.Fatal("Failed to init logger")
-	}
+	// Инициализация логгера на основе конфига
+	logger := initLogger("dev") // TODO: брать из config после загрузки
 	defer logger.Sync()
 
 	cfg, err = config.Load("config.yaml")
@@ -55,6 +52,31 @@ func main() {
 	if err := router.Run(sock); err != nil {
 		logger.Fatal("Failed to start server", zap.Error(err))
 	}
+}
+
+// initLogger создает логгер на основе окружения
+func initLogger(mode string) *zap.Logger {
+	var logger *zap.Logger
+	var err error
+
+	if mode == "prod" || mode == "release" {
+		// Production логгер: JSON формат, без stacktrace для Info/Warn
+		config := zap.NewProductionConfig()
+		config.EncoderConfig.TimeKey = "timestamp"
+		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+		logger, err = config.Build()
+	} else {
+		// Development логгер: удобный для чтения формат
+		config := zap.NewDevelopmentConfig()
+		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		logger, err = config.Build()
+	}
+
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize logger: %v", err))
+	}
+
+	return logger
 }
 
 func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
@@ -96,14 +118,40 @@ func newGin(logger *zap.Logger) *gin.Engine {
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 	router.Use(ginzap.RecoveryWithZap(logger, true))
 
-	// Добавляем логгер в контекст
-	router.Use(func(c *gin.Context) {
-		ctx := zapctx.WithLogger(c.Request.Context(), logger)
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	})
+	// Добавляем Request ID и логгер в контекст
+	router.Use(requestIDMiddleware())
+	router.Use(loggerMiddleware(logger))
 
 	return router
+}
+
+// requestIDMiddleware добавляет уникальный ID для каждого запроса
+func requestIDMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requestID := c.GetHeader("X-Request-ID")
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+		c.Set("request_id", requestID)
+		c.Header("X-Request-ID", requestID)
+		c.Next()
+	}
+}
+
+// loggerMiddleware добавляет логгер с request_id в контекст
+func loggerMiddleware(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requestID, _ := c.Get("request_id")
+		// Создаем логгер с request_id для трейсинга
+		loggerWithReqID := logger.With(
+			zap.String("request_id", requestID.(string)),
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+		)
+		ctx := zapctx.WithLogger(c.Request.Context(), loggerWithReqID)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
 }
 
 func indexHandler(c *gin.Context) {
@@ -111,9 +159,14 @@ func indexHandler(c *gin.Context) {
 }
 
 func receiveActivityHandler(c *gin.Context) {
+	ctx := c.Request.Context()
 	var event database.ActivityEvent
 
 	if err := c.ShouldBindJSON(&event); err != nil {
+		zapctx.Warn(ctx, "Invalid activity request",
+			zap.Error(err),
+			zap.String("remote_addr", c.ClientIP()),
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
@@ -122,35 +175,62 @@ func receiveActivityHandler(c *gin.Context) {
 		event.Timestamp = time.Now()
 	}
 
-	ctx := context.Background()
+	zapctx.Debug(ctx, "Inserting activity event",
+		zap.String("computer_name", event.ComputerName),
+		zap.String("username", event.Username),
+		zap.String("process", event.ProcessName),
+	)
+
 	if err := db.InsertActivityEvent(ctx, event); err != nil {
-		log.Printf("Failed to insert activity: %v", err)
+		zapctx.Error(ctx, "Failed to insert activity event",
+			zap.Error(err),
+			zap.String("computer_name", event.ComputerName),
+			zap.String("username", event.Username),
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
 		return
 	}
 
+	zapctx.Info(ctx, "Activity event saved successfully",
+		zap.String("computer_name", event.ComputerName),
+		zap.String("username", event.Username),
+	)
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func getEmployeesHandler(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
+
+	zapctx.Debug(ctx, "Fetching active employees")
+
 	employees, err := db.GetActiveEmployees(ctx)
 	if err != nil {
+		zapctx.Error(ctx, "Failed to fetch employees", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employees"})
 		return
 	}
 
+	zapctx.Info(ctx, "Employees fetched successfully",
+		zap.Int("count", len(employees)),
+	)
 	c.JSON(http.StatusOK, employees)
 }
 
 func getRecentActivityHandler(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
+
+	zapctx.Debug(ctx, "Fetching recent activity")
+
 	records, err := db.GetRecentActivity(ctx, 100)
 	if err != nil {
+		zapctx.Error(ctx, "Failed to fetch recent activity", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activity"})
 		return
 	}
 
+	zapctx.Info(ctx, "Recent activity fetched successfully",
+		zap.Int("count", len(records)),
+	)
 	c.JSON(http.StatusOK, records)
 }
 
