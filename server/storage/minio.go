@@ -1,0 +1,94 @@
+package storage
+
+import (
+        "bytes"
+        "context"
+        "fmt"
+        "io"
+
+        "github.com/minio/minio-go/v7"
+        "github.com/minio/minio-go/v7/pkg/credentials"
+)
+
+type Storage struct {
+        client            *minio.Client
+        screenshotsBucket string
+        usbCopiesBucket   string
+}
+
+func New(endpoint, accessKey, secretKey string, useSSL bool) (*Storage, error) {
+        client, err := minio.New(endpoint, &minio.Options{
+                Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+                Secure: useSSL,
+        })
+        if err != nil {
+                return nil, fmt.Errorf("failed to create MinIO client: %w", err)
+        }
+
+        s := &Storage{
+                client:            client,
+                screenshotsBucket: "screenshots",
+                usbCopiesBucket:   "usb-copies",
+        }
+
+        ctx := context.Background()
+
+        buckets := []string{s.screenshotsBucket, s.usbCopiesBucket}
+        for _, bucket := range buckets {
+                exists, err := client.BucketExists(ctx, bucket)
+                if err != nil {
+                        return nil, fmt.Errorf("failed to check bucket %s: %w", bucket, err)
+                }
+                if !exists {
+                        if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
+                                return nil, fmt.Errorf("failed to create bucket %s: %w", bucket, err)
+                        }
+                }
+        }
+
+        return s, nil
+}
+
+func (s *Storage) UploadScreenshot(ctx context.Context, screenshotID string, data []byte) (string, error) {
+        objectName := fmt.Sprintf("screenshots/%s.jpg", screenshotID)
+
+        _, err := s.client.PutObject(
+                ctx,
+                s.screenshotsBucket,
+                objectName,
+                bytes.NewReader(data),
+                int64(len(data)),
+                minio.PutObjectOptions{ContentType: "image/jpeg"},
+        )
+        if err != nil {
+                return "", fmt.Errorf("failed to upload screenshot: %w", err)
+        }
+
+        return objectName, nil
+}
+
+func (s *Storage) UploadUSBFile(ctx context.Context, computerName, relativePath string, data io.Reader, size int64) (string, error) {
+        objectName := fmt.Sprintf("%s/%s", computerName, relativePath)
+
+        _, err := s.client.PutObject(
+                ctx,
+                s.usbCopiesBucket,
+                objectName,
+                data,
+                size,
+                minio.PutObjectOptions{},
+        )
+        if err != nil {
+                return "", fmt.Errorf("failed to upload USB file: %w", err)
+        }
+
+        return objectName, nil
+}
+
+func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string) (string, error) {
+        url, err := s.client.PresignedGetObject(ctx, bucket, objectName, 3600, nil)
+        if err != nil {
+                return "", fmt.Errorf("failed to generate presigned URL: %w", err)
+        }
+        return url.String(), nil
+}

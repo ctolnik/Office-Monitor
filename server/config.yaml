@@ -1,0 +1,94 @@
+# Monitoring Server Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 5000
+  mode: "release"  # debug, release
+  api_key: "${SERVER_API_KEY}"  # Master API key for admin access
+
+database:
+  clickhouse:
+    host: "${CLICKHOUSE_HOST:-localhost}"
+    port: 9000
+    database: "monitoring"
+    username: "monitor_user"
+    password: "${CLICKHOUSE_PASSWORD}"
+    max_open_conns: 10
+    max_idle_conns: 5
+
+storage:
+  minio:
+    endpoint: "${MINIO_ENDPOINT:-localhost:9100}"
+    access_key: "${MINIO_ROOT_USER:-minioadmin}"
+    secret_key: "${MINIO_ROOT_PASSWORD}"
+    use_ssl: false
+    buckets:
+      screenshots: "screenshots"
+      usb_copies: "usb-copies"
+
+monitoring:
+  # Employee activity tracking
+  activity:
+    status_active_threshold_minutes: 5
+    status_idle_threshold_minutes: 30
+    
+  # Screenshot settings
+  screenshots:
+    enabled: true
+    retention_days: 180
+    max_size_mb: 5
+    compression_quality: 75
+    
+  # Keylogger settings (requires explicit consent)
+  keylogger:
+    enabled: false  # Must be explicitly enabled
+    retention_days: 180
+    monitored_processes:
+      - "chrome.exe"
+      - "firefox.exe"
+      - "msedge.exe"
+      - "opera.exe"
+    
+  # USB monitoring
+  usb:
+    enabled: true
+    shadow_copy_enabled: true
+    shadow_copy_share: "\\\\server\\usb-backups"
+    
+  # File copy monitoring
+  file_copy:
+    enabled: true
+    large_copy_threshold_mb: 100
+    alert_file_count_threshold: 100
+    alert_time_window_seconds: 300
+
+alerts:
+  enabled: true
+  real_time_notifications: true
+  email_notifications: false  # Configure SMTP below if enabled
+  webhook_url: ""  # Optional webhook for external alerts
+  
+  smtp:
+    enabled: false
+    host: "smtp.example.com"
+    port: 587
+    username: ""
+    password: ""
+    from: "monitoring@example.com"
+    to:
+      - "admin@example.com"
+
+security:
+  require_agent_auth: true
+  rotate_api_keys_days: 90
+  enable_https: false  # Enable in production
+  cors_allowed_origins:
+    - "http://localhost:5000"
+    - "http://localhost:3000"
+
+logging:
+  level: "info"  # debug, info, warn, error
+  file: "/app/logs/server.log"
+  max_size_mb: 100
+  max_backups: 10
+  max_age_days: 30
