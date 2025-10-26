@@ -8,8 +8,8 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	// Database   DatabaseConfig   `yaml:"database"`
+	Server   ServerConfig   `yaml:"server"`
+	Database DatabaseConfig `yaml:"database"`
 	// Storage    StorageConfig    `yaml:"storage"`
 	// Monitoring MonitoringConfig `yaml:"monitoring"`
 }
@@ -28,18 +28,18 @@ type ServerConfig struct {
 // 	APIKey string `yaml:"api_key" env: "OM_API_KEY"envDefault: ""`
 // }
 
-// type DatabaseConfig struct {
-// 	ClickHouse ClickHouseConfig `yaml:"clickhouse"`
-// }
+type DatabaseConfig struct {
+	// ClickHouse ClickHouseConfig `yaml:"clickhouse"`
+	Host         string `yaml:"host"`
+	Port         int    `yaml:"port"`
+	Database     string `yaml:"database"`
+	Username     string `yaml:"username"`
+	Password     string `yaml:"password"`
+	MaxOpenConns int    `yaml:"max_open_conns"`
+	MaxIdleConns int    `yaml:"max_idle_conns"`
+}
 
 // type ClickHouseConfig struct {
-// 	Host         string `yaml:"host"`
-// 	Port         int    `yaml:"port"`
-// 	Database     string `yaml:"database"`
-// 	Username     string `yaml:"username"`
-// 	Password     string `yaml:"password"`
-// 	MaxOpenConns int    `yaml:"max_open_conns"`
-// 	MaxIdleConns int    `yaml:"max_idle_conns"`
 // }
 
 // type StorageConfig struct {

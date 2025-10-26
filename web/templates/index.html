@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мониторинг сотрудников</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Система мониторинга активности сотрудников</h1>
+            <div class="header-info">
+                <span id="current-time"></span>
+                <span id="employee-count">Сотрудников онлайн: 0</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <h2>Сотрудники</h2>
+                <div class="filter-section">
+                    <input type="text" id="search-employee" placeholder="Поиск...">
+                    <select id="status-filter">
+                        <option value="all">Все статусы</option>
+                        <option value="active">Активные</option>
+                        <option value="idle">Неактивные</option>
+                        <option value="offline">Оффлайн</option>
+                    </select>
+                </div>
+                <div id="employee-list" class="employee-list"></div>
+            </aside>
+
+            <main class="content">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="overview">Обзор</button>
+                    <button class="tab-btn" data-tab="activity">Активность</button>
+                    <button class="tab-btn" data-tab="stats">Статистика</button>
+                </div>
+
+                <div id="overview" class="tab-content active">
+                    <div class="stats-cards">
+                        <div class="stat-card">
+                            <h3>Всего сотрудников</h3>
+                            <div class="stat-value" id="total-employees">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Активных сейчас</h3>
+                            <div class="stat-value" id="active-employees">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Неактивных</h3>
+                            <div class="stat-value" id="idle-employees">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Оффлайн</h3>
+                            <div class="stat-value" id="offline-employees">0</div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <h2>Последняя активность</h2>
+                        <div id="recent-activity" class="activity-feed"></div>
+                    </div>
+                </div>
+
+                <div id="activity" class="tab-content">
+                    <div class="section">
+                        <h2>Детальная активность</h2>
+                        <div class="date-filter">
+                            <label>От: <input type="datetime-local" id="date-from"></label>
+                            <label>До: <input type="datetime-local" id="date-to"></label>
+                            <button onclick="loadEmployeeActivity()">Применить</button>
+                        </div>
+                        <div id="employee-activity" class="activity-table"></div>
+                    </div>
+                </div>
+
+                <div id="stats" class="tab-content">
+                    <div class="section">
+                        <h2>Статистика использования приложений</h2>
+                        <div id="app-stats" class="stats-chart"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+---
+
+services:
+  # ClickHouse - единая база данных для всех данных
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.9
+    container_name: monitoring-clickhouse
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native protocol
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      CLICKHOUSE_DB: monitoring
+      CLICKHOUSE_USER: monitor_user
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change_me_in_production}
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+  # MinIO - S3-совместимое хранилище для скриншотов и USB копий
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: monitoring-minio
+  #   ports:
+  #     - "9100:9000"  # API
+  #     - "9101:9001"  # Console
+  #   volumes:
+  #     - minio_data:/data
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change_me_in_production}
+  #   command: server /data --console-address ":9001"
+  #   networks:
+  #     - monitoring-network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+  #     interval: 30s
+  #     timeout: 20s
+  #     retries: 3
+
+  # # MinIO Client - для создания buckets при запуске
+  # minio-init:
+  #   image: minio/mc:latest
+  #   container_name: monitoring-minio-init
+  #   depends_on:
+  #     - minio
+  #   networks:
+  #     - monitoring-network
+  #   entrypoint: >
+  #     /bin/sh -c "
+  #     sleep 10;
+  #     mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-change_me_in_production};
+  #     mc mb myminio/screenshots --ignore-existing;
+  #     mc mb myminio/usb-copies --ignore-existing;
+  #     mc policy set download myminio/screenshots;
+  #     mc ilm add myminio/screenshots --expiry-days 30;
+  #     echo 'MinIO buckets created successfully';
+  #     exit 0;
+  #     "
+
+  # Monitoring Server (Go application)
+  # server:
+  #   build:
+  #     context: ./server
+  #     dockerfile: Dockerfile
+  #   container_name: monitoring-server
+  #   ports:
+  #     - "5000:5000"
+  #   volumes:
+  #     - ./server/config.yaml:/app/config.yaml
+  #     - ./server/logs:/app/logs
+  #   environment:
+  #     - CONFIG_PATH=/app/config.yaml
+  #     - CLICKHOUSE_HOST=clickhouse
+  #     - MINIO_ENDPOINT=minio:9000
+  #   depends_on:
+  #     - clickhouse
+  #     - minio
+  #   networks:
+  #     - monitoring-network
+  #   restart: unless-stopped
+
+networks:
+  monitoring-network:
+    driver: bridge
+
+volumes:
+  clickhouse_data:
+    driver: local
+  # minio_data:
+  #   driver: local
+...

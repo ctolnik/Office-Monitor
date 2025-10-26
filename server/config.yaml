@@ -2,19 +2,21 @@
 
 server:
   host: "0.0.0.0"
-  port: 5000
+  port: 5500
   mode: "release"  # debug, release
   api_key: "${SERVER_API_KEY}"  # Master API key for admin access
 
 database:
-  clickhouse:
-    host: "${CLICKHOUSE_HOST:-localhost}"
-    port: 9000
-    database: "monitoring"
-    username: "monitor_user"
-    password: "${CLICKHOUSE_PASSWORD}"
-    max_open_conns: 10
-    max_idle_conns: 5
+  # clickhouse:
+  host: "127.0.0.1"
+  # host: "${CLICKHOUSE_HOST:-localhost}"
+  port: 9000
+  database: "monitoring"
+  username: "monitor_user"
+  password: "change_me_in_production"
+  # password: "${CLICKHOUSE_PASSWORD}"
+  max_open_conns: 10
+  max_idle_conns: 5
 
 storage:
   minio:

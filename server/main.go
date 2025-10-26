@@ -1,23 +1,23 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-
 	"net/http"
+	"time"
 
 	"github.com/ctolnik/Office-Monitor/server/config"
+	"github.com/ctolnik/Office-Monitor/server/database"
+	"github.com/ctolnik/Office-Monitor/zapctx"
 	"go.uber.org/zap"
 
-	// "employee-monitor/server/config"
-	// "employee-monitor/server/database"
-	// "employee-monitor/server/storage"
-
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	// db  *database.Database
+	db *database.Database
 	// st  *storage.Storage
 	cfg *config.Config
 )
@@ -25,6 +25,7 @@ var (
 func main() {
 	var err error
 
+	// logger, error := zap.NewProduction()
 	logger, error := zap.NewDevelopment()
 	if error != nil {
 		log.Fatal("Failed to init logger")
@@ -33,114 +34,125 @@ func main() {
 
 	cfg, err = config.Load("config.yaml")
 	if err != nil {
-		logger.Fatal("Failed to load config:", zap.Error(err))
+		logger.Fatal("Failed to load config", zap.Error(err))
 	}
+	fmt.Println(cfg)
+	db, err = database.New(
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.Database,
+		cfg.Database.Username,
+		cfg.Database.Password,
+	)
+	if err != nil {
+		logger.Fatal("Failed to connect to database", zap.Error(err))
+	}
+	defer db.Close()
+	router := initGin(cfg, logger)
 
-	// db, err = database.New(
-	// 	cfg.Database.ClickHouse.Host,
-	// 	cfg.Database.ClickHouse.Port,
-	// 	cfg.Database.ClickHouse.Database,
-	// 	cfg.Database.ClickHouse.Username,
-	// 	cfg.Database.ClickHouse.Password,
-	// )
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to database: %v", err)
-	// }
-	// defer db.Close()
+	sock := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	logger.Info("Server starting", zap.String("Socket", sock))
+	if err := router.Run(sock); err != nil {
+		logger.Fatal("Failed to start server", zap.Error(err))
+	}
+}
 
-	// st, err = storage.New(
-	// 	cfg.Storage.MinIO.Endpoint,
-	// 	cfg.Storage.MinIO.AccessKey,
-	// 	cfg.Storage.MinIO.SecretKey,
-	// 	cfg.Storage.MinIO.UseSSL,
-	// )
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to MinIO: %v", err)
-	// }
-
-	if cfg.Server.Mode == "prod" {
+func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
+	if c.Server.Mode == "prod" {
+		logger.Debug("Server mode is prode")
 		gin.SetMode(gin.ReleaseMode)
 	}
-
-	router := gin.Default()
+	router := newGin(logger)
+	// router := gin.Default()
 	router.LoadHTMLGlob("../web/templates/*")
 	router.Static("/static", "../web/static")
 
 	router.GET("/", indexHandler)
 
-	// api := router.Group("/api")
-	// {
-	// 	api.POST("/activity", receiveActivityHandler)
-	// 	api.GET("/employees", getEmployeesHandler)
-	// 	api.GET("/activity/recent", getRecentActivityHandler)
+	api := router.Group("/api")
+	{
+		api.POST("/activity", receiveActivityHandler)
+		api.GET("/employees", getEmployeesHandler)
+		api.GET("/activity/recent", getRecentActivityHandler)
 
-	// 	api.POST("/usb/event", receiveUSBEventHandler)
-	// 	api.GET("/usb/events", getUSBEventsHandler)
+		// api.POST("/usb/event", receiveUSBEventHandler)
+		// api.GET("/usb/events", getUSBEventsHandler)
 
-	// 	api.POST("/file/event", receiveFileEventHandler)
-	// 	api.GET("/file/events", getFileEventsHandler)
+		// api.POST("/file/event", receiveFileEventHandler)
+		// api.GET("/file/events", getFileEventsHandler)
 
-	// 	api.POST("/screenshot", receiveScreenshotHandler)
+		// api.POST("/screenshot", receiveScreenshotHandler)
 
-	// 	api.POST("/keyboard/event", receiveKeyboardEventHandler)
-	// 	api.GET("/keyboard/events", getKeyboardEventsHandler)
-	// }
-
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-	logger.Info("Server starting on: ", zap.String("address", addr))
-	// log.Printf("Server starting on %s", addr)
-	if err := router.Run(addr); err != nil {
-		logger.Fatal("Failed to start server:", zap.Error(err))
-		// log.Fatalf("Failed to start server: %v", err)
+		// api.POST("/keyboard/event", receiveKeyboardEventHandler)
+		// api.GET("/keyboard/events", getKeyboardEventsHandler)
 	}
+	return router
+}
+
+func newGin(logger *zap.Logger) *gin.Engine {
+	router := gin.New()
+
+	// HTTP логирование
+	router.Use(ginzap.Ginzap(logger, time.RFC3339, true))
+	router.Use(ginzap.RecoveryWithZap(logger, true))
+
+	// Добавляем логгер в контекст
+	router.Use(func(c *gin.Context) {
+		ctx := zapctx.WithLogger(c.Request.Context(), logger)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
+
+	return router
 }
 
 func indexHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", nil)
 }
 
-// func receiveActivityHandler(c *gin.Context) {
-// 	var event database.ActivityEvent
-// 	if err := c.ShouldBindJSON(&event); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-// 		return
-// 	}
+func receiveActivityHandler(c *gin.Context) {
+	var event database.ActivityEvent
 
-// 	if event.Timestamp.IsZero() {
-// 		event.Timestamp = time.Now()
-// 	}
+	if err := c.ShouldBindJSON(&event); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
 
-// 	ctx := context.Background()
-// 	if err := db.InsertActivityEvent(ctx, event); err != nil {
-// 		log.Printf("Failed to insert activity: %v", err)
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
-// 		return
-// 	}
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
 
-// 	c.JSON(http.StatusOK, gin.H{"status": "success"})
-// }
+	ctx := context.Background()
+	if err := db.InsertActivityEvent(ctx, event); err != nil {
+		log.Printf("Failed to insert activity: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+		return
+	}
 
-// func getEmployeesHandler(c *gin.Context) {
-// 	ctx := context.Background()
-// 	employees, err := db.GetActiveEmployees(ctx)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employees"})
-// 		return
-// 	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
 
-// 	c.JSON(http.StatusOK, employees)
-// }
+func getEmployeesHandler(c *gin.Context) {
+	ctx := context.Background()
+	employees, err := db.GetActiveEmployees(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employees"})
+		return
+	}
 
-// func getRecentActivityHandler(c *gin.Context) {
-// 	ctx := context.Background()
-// 	records, err := db.GetRecentActivity(ctx, 100)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activity"})
-// 		return
-// 	}
+	c.JSON(http.StatusOK, employees)
+}
 
-// 	c.JSON(http.StatusOK, records)
-// }
+func getRecentActivityHandler(c *gin.Context) {
+	ctx := context.Background()
+	records, err := db.GetRecentActivity(ctx, 100)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activity"})
+		return
+	}
+
+	c.JSON(http.StatusOK, records)
+}
 
 // func receiveUSBEventHandler(c *gin.Context) {
 // 	var event database.USBEvent
