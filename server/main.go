@@ -23,6 +23,11 @@ var (
 	cfg *config.Config
 )
 
+const (
+	template = "./web/templates/*"
+	static   = "./web/static"
+)
+
 func main() {
 	var err error
 
@@ -34,6 +39,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to load config", zap.Error(err))
 	}
+	fmt.Println(cfg)
 	db, err = database.New(
 		cfg.Database.Host,
 		cfg.Database.Port,
@@ -85,8 +91,8 @@ func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	router := newGin(logger)
-	router.LoadHTMLGlob("../web/templates/*")
-	router.Static("/static", "../web/static")
+	router.LoadHTMLGlob(template)
+	router.Static("/static", static)
 
 	router.GET("/", indexHandler)
 

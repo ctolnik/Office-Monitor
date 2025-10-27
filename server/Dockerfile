@@ -8,11 +8,12 @@ WORKDIR /build
 RUN apk add --no-cache git gcc musl-dev
 
 # Copy go mod files
-COPY go.mod go.sum ./
+COPY ./server/go.mod ./server/go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY . .
+COPY ./server .
+COPY ./web ./web
 
 # Build the application
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o monitoring-server .

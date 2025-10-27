@@ -8,8 +8,9 @@ server:
 
 database:
   # clickhouse:
-  host: "127.0.0.1"
+  # host: "127.0.0.1"
   # host: "${CLICKHOUSE_HOST:-localhost}"
+  host: "clickhouse"
   port: 9000
   database: "monitoring"
   username: "monitor_user"
@@ -20,8 +21,9 @@ database:
 
 storage:
   # minio:
-  endpoint: "${MINIO_ENDPOINT:-127.0.0.1:9100}"
+  # endpoint: "${MINIO_ENDPOINT:-127.0.0.1:9100}"
   # endpoint: "${MINIO_ENDPOINT:-localhost:9100}"
+  endpoint: "minio"
   access_key: "${MINIO_ROOT_USER:-minioadmin}"
   # secret_key: "${MINIO_ROOT_PASSWORD}"
   secret_key: "change_me_in_production"

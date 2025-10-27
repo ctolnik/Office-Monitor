@@ -59,11 +59,11 @@ services:
   #Monitoring Server (Go application)
   server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: ./server/Dockerfile
     container_name: monitoring-server
     ports:
-      - "5000:5000"
+      - "5500:5000"
     volumes:
       - ./server/config.yaml:/app/config.yaml
       - ./server/logs:/app/logs
