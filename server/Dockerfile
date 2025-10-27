@@ -1,6 +1,6 @@
 # Multi-stage build for Go monitoring server
 
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24.5-alpine AS builder
 
 WORKDIR /build
 

@@ -56,27 +56,27 @@ services:
       exit 0;
       "
 
-  # Monitoring Server (Go application)
-  # server:
-  #   build:
-  #     context: ./server
-  #     dockerfile: Dockerfile
-  #   container_name: monitoring-server
-  #   ports:
-  #     - "5000:5000"
-  #   volumes:
-  #     - ./server/config.yaml:/app/config.yaml
-  #     - ./server/logs:/app/logs
-  #   environment:
-  #     - CONFIG_PATH=/app/config.yaml
-  #     - CLICKHOUSE_HOST=clickhouse
-  #     - MINIO_ENDPOINT=minio:9000
-  #   depends_on:
-  #     - clickhouse
-  #     - minio
-  #   networks:
-  #     - monitoring-network
-  #   restart: unless-stopped
+  #Monitoring Server (Go application)
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: monitoring-server
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server/config.yaml:/app/config.yaml
+      - ./server/logs:/app/logs
+    environment:
+      - CONFIG_PATH=/app/config.yaml
+      - CLICKHOUSE_HOST=clickhouse
+      - MINIO_ENDPOINT=minio:9000
+    depends_on:
+      - clickhouse
+      - minio
+    networks:
+      - monitoring-network
+    restart: unless-stopped
 
 networks:
   monitoring-network:
