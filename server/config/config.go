@@ -39,51 +39,51 @@ type DatabaseConfig struct {
 	MaxIdleConns int    `yaml:"max_idle_conns"`
 }
 
-// type ClickHouseConfig struct {
-// }
+type ClickHouseConfig struct {
+}
 
-// type StorageConfig struct {
-// 	MinIO MinIOConfig `yaml:"minio"`
-// }
+type StorageConfig struct {
+	MinIO MinIOConfig `yaml:"minio"`
+}
 
-// type MinIOConfig struct {
-// 	Endpoint  string `yaml:"endpoint"`
-// 	AccessKey string `yaml:"access_key"`
-// 	SecretKey string `yaml:"secret_key"`
-// 	UseSSL    bool   `yaml:"use_ssl"`
-// }
+type MinIOConfig struct {
+	Endpoint  string `yaml:"endpoint"`
+	AccessKey string `yaml:"access_key"`
+	SecretKey string `yaml:"secret_key"`
+	UseSSL    bool   `yaml:"use_ssl"`
+}
 
-// type MonitoringConfig struct {
-// 	Activity    ActivityConfig   `yaml:"activity"`
-// 	Screenshots ScreenshotConfig `yaml:"screenshots"`
-// 	USB         USBConfig        `yaml:"usb"`
-// 	FileCopy    FileCopyConfig   `yaml:"file_copy"`
-// }
+type MonitoringConfig struct {
+	Activity    ActivityConfig   `yaml:"activity"`
+	Screenshots ScreenshotConfig `yaml:"screenshots"`
+	USB         USBConfig        `yaml:"usb"`
+	FileCopy    FileCopyConfig   `yaml:"file_copy"`
+}
 
-// type ActivityConfig struct {
-// 	StatusActiveThresholdMinutes int `yaml:"status_active_threshold_minutes"`
-// 	StatusIdleThresholdMinutes   int `yaml:"status_idle_threshold_minutes"`
-// }
+type ActivityConfig struct {
+	StatusActiveThresholdMinutes int `yaml:"status_active_threshold_minutes"`
+	StatusIdleThresholdMinutes   int `yaml:"status_idle_threshold_minutes"`
+}
 
-// type ScreenshotConfig struct {
-// 	Enabled            bool `yaml:"enabled"`
-// 	RetentionDays      int  `yaml:"retention_days"`
-// 	MaxSizeMB          int  `yaml:"max_size_mb"`
-// 	CompressionQuality int  `yaml:"compression_quality"`
-// }
+type ScreenshotConfig struct {
+	Enabled            bool `yaml:"enabled"`
+	RetentionDays      int  `yaml:"retention_days"`
+	MaxSizeMB          int  `yaml:"max_size_mb"`
+	CompressionQuality int  `yaml:"compression_quality"`
+}
 
-// type USBConfig struct {
-// 	Enabled           bool   `yaml:"enabled"`
-// 	ShadowCopyEnabled bool   `yaml:"shadow_copy_enabled"`
-// 	ShadowCopyShare   string `yaml:"shadow_copy_share"`
-// }
+type USBConfig struct {
+	Enabled           bool   `yaml:"enabled"`
+	ShadowCopyEnabled bool   `yaml:"shadow_copy_enabled"`
+	ShadowCopyShare   string `yaml:"shadow_copy_share"`
+}
 
-// type FileCopyConfig struct {
-// 	Enabled                  bool `yaml:"enabled"`
-// 	LargeCopyThresholdMB     int  `yaml:"large_copy_threshold_mb"`
-// 	AlertFileCountThreshold  int  `yaml:"alert_file_count_threshold"`
-// 	AlertTimeWindowSeconds   int  `yaml:"alert_time_window_seconds"`
-// }
+type FileCopyConfig struct {
+	Enabled                 bool `yaml:"enabled"`
+	LargeCopyThresholdMB    int  `yaml:"large_copy_threshold_mb"`
+	AlertFileCountThreshold int  `yaml:"alert_file_count_threshold"`
+	AlertTimeWindowSeconds  int  `yaml:"alert_time_window_seconds"`
+}
 
 func Load(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)

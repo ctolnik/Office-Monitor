@@ -19,14 +19,16 @@ database:
   max_idle_conns: 5
 
 storage:
-  minio:
-    endpoint: "${MINIO_ENDPOINT:-localhost:9100}"
-    access_key: "${MINIO_ROOT_USER:-minioadmin}"
-    secret_key: "${MINIO_ROOT_PASSWORD}"
-    use_ssl: false
-    buckets:
-      screenshots: "screenshots"
-      usb_copies: "usb-copies"
+  # minio:
+  endpoint: "${MINIO_ENDPOINT:-127.0.0.1:9100}"
+  # endpoint: "${MINIO_ENDPOINT:-localhost:9100}"
+  access_key: "${MINIO_ROOT_USER:-minioadmin}"
+  # secret_key: "${MINIO_ROOT_PASSWORD}"
+  secret_key: "change_me_in_production"
+  use_ssl: false
+  buckets:
+    screenshots: "screenshots"
+    usb_copies: "usb-copies"
 
 monitoring:
   # Employee activity tracking
