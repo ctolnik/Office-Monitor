@@ -1,0 +1,110 @@
+# Monitoring Agent Configuration for Windows
+
+agent:
+  # Unique identifier for this agent (auto-generated from computer name if empty)
+  computer_name: "${COMPUTERNAME}"
+  
+  # API authentication
+  api_key: "${AGENT_API_KEY}"  # Must be registered on server
+  
+  # Server connection
+  server:
+    url: "http://monitoring-server:5000"  # Change to your server URL
+    timeout_seconds: 30
+    retry_attempts: 3
+    retry_delay_seconds: 5
+
+# Activity monitoring
+activity_monitoring:
+  enabled: true
+  interval_seconds: 30  # How often to send activity data
+  track_window_titles: true
+  track_process_names: true
+  idle_threshold_seconds: 300  # 5 minutes
+
+# Screenshot capture
+screenshots:
+  enabled: false  # Must be explicitly enabled
+  interval_minutes: 15  # Capture every 15 minutes when active
+  capture_on_activity_only: true  # Only capture when user is active
+  quality: 75  # JPEG quality (1-100)
+  max_size_kb: 500  # Maximum file size before compression
+  upload_immediately: true
+
+# Keylogger (requires explicit user consent)
+keylogger:
+  enabled: false  # MUST BE EXPLICITLY ENABLED
+  # Only capture from specified processes
+  monitored_processes:
+    - "chrome.exe"
+    - "firefox.exe"
+    - "msedge.exe"
+  buffer_size_chars: 1000  # Send when buffer reaches this size
+  send_interval_minutes: 5  # Or send every N minutes
+
+# USB device monitoring
+usb_monitoring:
+  enabled: true
+  detect_new_devices: true
+  shadow_copy_enabled: false  # Copy files from USB to network share
+  shadow_copy_destination: "\\\\server\\usb-backups\\${COMPUTERNAME}"
+  
+  # File types to copy (empty = all files)
+  copy_file_extensions:
+    - ".doc"
+    - ".docx"
+    - ".xls"
+    - ".xlsx"
+    - ".pdf"
+    - ".zip"
+    - ".rar"
+  
+  # Exclude system files
+  exclude_patterns:
+    - "System Volume Information"
+    - "$RECYCLE.BIN"
+    - "*.tmp"
+
+# File operation monitoring
+file_monitoring:
+  enabled: true
+  
+  # Alert on large copy operations
+  alert_on_large_copy: true
+  large_copy_threshold_mb: 100
+  large_copy_file_count: 100
+  
+  # Monitor specific locations
+  monitored_locations:
+    - "C:\\Users\\*\\Documents"
+    - "C:\\Users\\*\\Desktop"
+    - "C:\\Users\\*\\Downloads"
+  
+  # Detect copy to external destinations
+  detect_external_copy: true
+
+# Performance and resource limits
+performance:
+  max_memory_mb: 100
+  max_cpu_percent: 10
+  screenshot_max_queue: 10
+  event_buffer_size: 1000
+
+# Logging
+logging:
+  level: "info"  # debug, info, warn, error
+  file: "C:\\ProgramData\\MonitoringAgent\\agent.log"
+  max_size_mb: 50
+  max_backups: 5
+
+# Security
+security:
+  encrypt_traffic: true
+  verify_server_certificate: false  # Set true in production with valid cert
+  allow_remote_config: true  # Allow server to update config remotely
+
+# Auto-update
+auto_update:
+  enabled: false
+  check_interval_hours: 24
+  update_url: "http://monitoring-server:5000/api/agent/update"
