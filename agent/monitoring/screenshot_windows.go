@@ -19,6 +19,7 @@ import (
 
 	"github.com/ctolnik/Office-Monitor/agent/httpclient"
 )
+
 const (
 	SM_CXSCREEN    = 0
 	SM_CYSCREEN    = 1

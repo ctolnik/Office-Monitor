@@ -123,10 +123,10 @@ func main() {
 
 	// Initialize all monitors
 	initActivityMonitor(ctx, cfg, httpClient, mgr.eventBuffer, mgr)
-	initUSBMonitor(cfg, mgr)
+	initUSBMonitor(cfg, mgr.eventBuffer, mgr)
 	initScreenshotMonitor(cfg, httpClient, mgr)
-	initFileMonitor(cfg, mgr)
-	initKeylogger(cfg, mgr)
+	initFileMonitor(cfg, mgr.eventBuffer, mgr)
+	initKeylogger(cfg, mgr.eventBuffer, mgr)
 
 	log.Printf("Agent is running with %d active monitors...", countActiveMonitors(mgr))
 	if mgr.eventBuffer != nil {
@@ -211,7 +211,7 @@ func initActivityMonitor(ctx context.Context, cfg *config.Config, client *httpcl
 }
 
 // initUSBMonitor initializes USB monitoring
-func initUSBMonitor(cfg *config.Config, mgr *monitorManager) {
+func initUSBMonitor(cfg *config.Config, eventBuffer *buffer.EventBuffer, mgr *monitorManager) {
 	if !cfg.USBMonitoring.Enabled {
 		log.Println("USB monitoring: DISABLED")
 		return
@@ -225,6 +225,7 @@ func initUSBMonitor(cfg *config.Config, mgr *monitorManager) {
 		cfg.USBMonitoring.ShadowCopyDest,
 		cfg.USBMonitoring.CopyFileExtensions,
 		cfg.USBMonitoring.ExcludePatterns,
+		eventBuffer,
 	)
 
 	if err := monitor.Start(); err != nil {
@@ -269,7 +270,7 @@ func initScreenshotMonitor(cfg *config.Config, client *httpclient.Client, mgr *m
 }
 
 // initFileMonitor initializes file monitoring
-func initFileMonitor(cfg *config.Config, mgr *monitorManager) {
+func initFileMonitor(cfg *config.Config, eventBuffer *buffer.EventBuffer, mgr *monitorManager) {
 	if !cfg.FileMonitoring.Enabled {
 		log.Println("File monitoring: DISABLED")
 		return
@@ -283,6 +284,7 @@ func initFileMonitor(cfg *config.Config, mgr *monitorManager) {
 		cfg.FileMonitoring.LargeCopyThresholdMB,
 		cfg.FileMonitoring.LargeCopyFileCount,
 		cfg.FileMonitoring.DetectExternalCopy,
+		eventBuffer,
 	)
 
 	if err := monitor.Start(); err != nil {
@@ -298,7 +300,7 @@ func initFileMonitor(cfg *config.Config, mgr *monitorManager) {
 }
 
 // initKeylogger initializes keylogger
-func initKeylogger(cfg *config.Config, mgr *monitorManager) {
+func initKeylogger(cfg *config.Config, eventBuffer *buffer.EventBuffer, mgr *monitorManager) {
 	if !cfg.Keylogger.Enabled {
 		log.Println("Keylogger: DISABLED")
 		return
@@ -313,6 +315,7 @@ func initKeylogger(cfg *config.Config, mgr *monitorManager) {
 		cfg.Keylogger.MonitoredProcesses,
 		cfg.Keylogger.BufferSizeChars,
 		cfg.Keylogger.SendIntervalMin,
+		eventBuffer,
 	)
 
 	if err := keylogger.Start(); err != nil {

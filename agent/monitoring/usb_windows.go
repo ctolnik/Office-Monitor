@@ -5,6 +5,7 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ctolnik/Office-Monitor/agent/buffer"
 	"golang.org/x/sys/windows"
 )
 
@@ -37,6 +39,7 @@ type USBMonitor struct {
 	connectedDevices  map[string]*USBDevice
 	mu                sync.RWMutex
 	client            *http.Client
+	eventBuffer       *buffer.EventBuffer
 }
 
 type USBDevice struct {
@@ -59,7 +62,7 @@ type USBEvent struct {
 	VolumeSerial string    `json:"volume_serial"`
 }
 
-func NewUSBMonitor(serverURL, computerName, username string, shadowCopyEnabled bool, shadowCopyDest string, copyExtensions, excludePatterns []string) *USBMonitor {
+func NewUSBMonitor(serverURL, computerName, username string, shadowCopyEnabled bool, shadowCopyDest string, copyExtensions, excludePatterns []string, eventBuffer *buffer.EventBuffer) *USBMonitor {
 	return &USBMonitor{
 		serverURL:         serverURL,
 		computerName:      computerName,
@@ -71,6 +74,7 @@ func NewUSBMonitor(serverURL, computerName, username string, shadowCopyEnabled b
 		excludePatterns:   excludePatterns,
 		connectedDevices:  make(map[string]*USBDevice),
 		client:            &http.Client{Timeout: 30 * time.Second},
+		eventBuffer:       eventBuffer,
 	}
 }
 
@@ -339,6 +343,12 @@ func (m *USBMonitor) copyFile(src, dst string) error {
 }
 
 func (m *USBMonitor) sendEvent(event USBEvent) error {
+	// Use buffer if available (offline-ready)
+	if m.eventBuffer != nil {
+		return m.eventBuffer.Add("usb", event)
+	}
+
+	// Fallback to direct send
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err

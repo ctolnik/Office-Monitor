@@ -5,6 +5,7 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/ctolnik/Office-Monitor/agent/buffer"
 	"golang.org/x/sys/windows"
 )
 
@@ -45,6 +47,7 @@ type FileMonitor struct {
 	activityBuffer       map[string]*FileActivity
 	lastAlertTime        time.Time
 	alertCooldownSec     int
+	eventBuffer          *buffer.EventBuffer
 }
 
 type FileActivity struct {
@@ -67,7 +70,7 @@ type FileEvent struct {
 	IsUSBTarget     bool      `json:"is_usb_target"`
 }
 
-func NewFileMonitor(serverURL, computerName, username string, monitoredLocations []string, largeCopyThresholdMB, largeCopyFileCount int, detectExternalCopy bool) *FileMonitor {
+func NewFileMonitor(serverURL, computerName, username string, monitoredLocations []string, largeCopyThresholdMB, largeCopyFileCount int, detectExternalCopy bool, eventBuffer *buffer.EventBuffer) *FileMonitor {
 	return &FileMonitor{
 		serverURL:            serverURL,
 		computerName:         computerName,
@@ -81,6 +84,7 @@ func NewFileMonitor(serverURL, computerName, username string, monitoredLocations
 		stopChan:             make(chan bool),
 		activityBuffer:       make(map[string]*FileActivity),
 		alertCooldownSec:     60,
+		eventBuffer:          eventBuffer,
 	}
 }
 
@@ -301,6 +305,12 @@ func (m *FileMonitor) checkForLargeCopyActivity() {
 }
 
 func (m *FileMonitor) sendEvent(event FileEvent) error {
+	// Use buffer if available (offline-ready)
+	if m.eventBuffer != nil {
+		return m.eventBuffer.Add("file", event)
+	}
+
+	// Fallback to direct send
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err

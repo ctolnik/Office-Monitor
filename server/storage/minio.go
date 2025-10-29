@@ -16,7 +16,7 @@ type Storage struct {
 	usbCopiesBucket   string
 }
 
-func New(endpoint, accessKey, secretKey string, useSSL bool) (*Storage, error) {
+func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, usbCopiesBucket string) (*Storage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -25,10 +25,18 @@ func New(endpoint, accessKey, secretKey string, useSSL bool) (*Storage, error) {
 		return nil, fmt.Errorf("failed to create MinIO client: %w", err)
 	}
 
+	// Use provided bucket names or defaults
+	if screenshotsBucket == "" {
+		screenshotsBucket = "screenshots"
+	}
+	if usbCopiesBucket == "" {
+		usbCopiesBucket = "usb-copies"
+	}
+
 	s := &Storage{
 		client:            client,
-		screenshotsBucket: "screenshots",
-		usbCopiesBucket:   "usb-copies",
+		screenshotsBucket: screenshotsBucket,
+		usbCopiesBucket:   usbCopiesBucket,
 	}
 
 	ctx := context.Background()

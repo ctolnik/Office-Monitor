@@ -10,7 +10,7 @@ import (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
-	// Storage    StorageConfig    `yaml:"storage"`
+	Storage  StorageConfig  `yaml:"storage"`
 	// Monitoring MonitoringConfig `yaml:"monitoring"`
 }
 
@@ -43,14 +43,16 @@ type ClickHouseConfig struct {
 }
 
 type StorageConfig struct {
-	MinIO MinIOConfig `yaml:"minio"`
+	Endpoint  string        `yaml:"endpoint"`
+	AccessKey string        `yaml:"access_key"`
+	SecretKey string        `yaml:"secret_key"`
+	UseSSL    bool          `yaml:"use_ssl"`
+	Buckets   BucketsConfig `yaml:"buckets"`
 }
 
-type MinIOConfig struct {
-	Endpoint  string `yaml:"endpoint"`
-	AccessKey string `yaml:"access_key"`
-	SecretKey string `yaml:"secret_key"`
-	UseSSL    bool   `yaml:"use_ssl"`
+type BucketsConfig struct {
+	Screenshots string `yaml:"screenshots"`
+	USBCopies   string `yaml:"usb_copies"`
 }
 
 type MonitoringConfig struct {
