@@ -52,6 +52,25 @@ func main() {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 	defer db.Close()
+
+	// Initialize MinIO storage for screenshots and USB files
+	st, err = storage.New(
+		cfg.Storage.Endpoint,
+		cfg.Storage.AccessKey,
+		cfg.Storage.SecretKey,
+		cfg.Storage.UseSSL,
+		cfg.Storage.Buckets.Screenshots,
+		cfg.Storage.Buckets.USBCopies,
+	)
+	if err != nil {
+		logger.Fatal("Failed to connect to MinIO storage", zap.Error(err))
+	}
+	logger.Info("Storage initialized",
+		zap.String("endpoint", cfg.Storage.Endpoint),
+		zap.String("screenshots_bucket", cfg.Storage.Buckets.Screenshots),
+		zap.String("usb_bucket", cfg.Storage.Buckets.USBCopies),
+	)
+
 	router := initGin(cfg, logger)
 
 	sock := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

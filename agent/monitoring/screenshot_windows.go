@@ -5,19 +5,20 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"log"
-	"net/http"
 	"sync"
 	"syscall"
 	"time"
 	"unsafe"
-)
 
+	"github.com/ctolnik/Office-Monitor/agent/httpclient"
+)
 const (
 	SM_CXSCREEN    = 0
 	SM_CYSCREEN    = 1
@@ -57,7 +58,7 @@ type ScreenshotMonitor struct {
 	uploadImmediately bool
 	stopChan          chan struct{}
 	wg                sync.WaitGroup
-	client            *http.Client
+	httpClient        *httpclient.Client
 	mu                sync.RWMutex
 	screenshotQueue   chan *ScreenshotData
 	maxQueueSize      int
@@ -74,7 +75,7 @@ type ScreenshotData struct {
 	ImageData    []byte    `json:"image_data"`
 }
 
-func NewScreenshotMonitor(serverURL, computerName, username string, intervalMinutes, quality, maxSizeKB int, captureOnlyActive, uploadImmediately bool) *ScreenshotMonitor {
+func NewScreenshotMonitor(serverURL, computerName, username string, intervalMinutes, quality, maxSizeKB int, captureOnlyActive, uploadImmediately bool, httpClient *httpclient.Client) *ScreenshotMonitor {
 	maxQueue := 100
 	return &ScreenshotMonitor{
 		serverURL:         serverURL,
@@ -87,7 +88,7 @@ func NewScreenshotMonitor(serverURL, computerName, username string, intervalMinu
 		captureOnlyActive: captureOnlyActive,
 		uploadImmediately: uploadImmediately,
 		stopChan:          make(chan struct{}),
-		client:            &http.Client{Timeout: 60 * time.Second},
+		httpClient:        httpClient,
 		screenshotQueue:   make(chan *ScreenshotData, maxQueue),
 		maxQueueSize:      maxQueue,
 	}
@@ -348,21 +349,6 @@ func (m *ScreenshotMonitor) getForegroundWindowTitle() string {
 }
 
 func (m *ScreenshotMonitor) sendScreenshot(screenshot *ScreenshotData) error {
-	data, err := json.Marshal(screenshot)
-	if err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("%s/api/screenshot", m.serverURL)
-	resp, err := m.client.Post(url, "application/json", bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
-
-	return nil
+	ctx := context.Background()
+	return m.httpClient.PostJSON(ctx, "/api/screenshot", screenshot)
 }

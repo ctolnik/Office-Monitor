@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Client represents an HTTP client with retry logic and authentication
@@ -80,32 +82,49 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, payload interfac
 			continue
 		}
 
+		// Generate unique request ID for tracing
+		requestID := uuid.New().String()
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Request-ID", requestID)
 		if c.apiKey != "" {
 			req.Header.Set("X-API-Key", c.apiKey)
 		}
 
+		start := time.Now()
 		resp, err := c.httpClient.Do(req)
+		duration := time.Since(start)
+
 		if err != nil {
-			lastErr = fmt.Errorf("request failed: %w", err)
+			lastErr = fmt.Errorf("[request_id=%s] request failed after %v: %w", requestID, duration, err)
+			log.Printf("%v", lastErr)
 			continue
 		}
 
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
+		// Get server's request ID (may be same or server-generated)
+		serverRequestID := resp.Header.Get("X-Request-ID")
+		if serverRequestID != "" {
+			requestID = serverRequestID
+		}
+
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			log.Printf("[request_id=%s] POST %s succeeded (%d) after %v", requestID, endpoint, resp.StatusCode, duration)
 			return nil
 		}
 
 		if resp.StatusCode >= 500 {
 			// Server error - retry
-			lastErr = fmt.Errorf("server error %d: %s", resp.StatusCode, string(body))
+			lastErr = fmt.Errorf("[request_id=%s] server error %d after %v: %s", requestID, resp.StatusCode, duration, string(body))
+			log.Printf("%v", lastErr)
 			continue
 		}
 
 		// Client error (4xx) - don't retry
-		return fmt.Errorf("client error %d: %s", resp.StatusCode, string(body))
+		err = fmt.Errorf("[request_id=%s] client error %d after %v: %s", requestID, resp.StatusCode, duration, string(body))
+		log.Printf("%v", err)
+		return err
 	}
 
 	return fmt.Errorf("request failed after %d attempts: %w", c.retryAttempts, lastErr)

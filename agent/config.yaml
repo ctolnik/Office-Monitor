@@ -23,13 +23,15 @@ activity_monitoring:
   idle_threshold_seconds: 300  # 5 minutes
 
 # Screenshot capture
+# NOTE: Screenshots are uploaded to MinIO object storage on the server
+#       This is different from USB files which go to SMB share (see usb_monitoring)
 screenshots:
   enabled: false  # Must be explicitly enabled
   interval_minutes: 15  # Capture every 15 minutes when active
   capture_on_activity_only: true  # Only capture when user is active
   quality: 75  # JPEG quality (1-100)
   max_size_kb: 500  # Maximum file size before compression
-  upload_immediately: true
+  upload_immediately: true  # Upload to server's MinIO immediately after capture
 
 # Keylogger (requires explicit user consent)
 keylogger:
@@ -43,11 +45,13 @@ keylogger:
   send_interval_minutes: 5  # Or send every N minutes
 
 # USB device monitoring
+# NOTE: USB shadow copy goes to SMB network share (configured below)
+#       This is different from screenshots which go to MinIO on the server
 usb_monitoring:
   enabled: true
   detect_new_devices: true
-  shadow_copy_enabled: false  # Copy files from USB to network share
-  shadow_copy_destination: "\\\\server\\usb-backups\\${COMPUTERNAME}"
+  shadow_copy_enabled: false  # Copy files from USB to network share (NOT to server)
+  shadow_copy_destination: "\\\\server\\usb-backups\\${COMPUTERNAME}"  # SMB path on local network
   
   # File types to copy (empty = all files)
   copy_file_extensions:

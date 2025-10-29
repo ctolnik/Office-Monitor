@@ -1,0 +1,28 @@
+2025/10/29 15:48:37 main.go:65: Employee Monitoring Agent v1.0.0 starting...
+2025/10/29 15:48:37 main.go:81: Computer: ADM-01, User: a-kiv
+2025/10/29 15:48:37 main.go:82: Server: http://monitor.net.gslaudit.ru:5500
+2025/10/29 15:48:37 main.go:98: Server connection OK
+2025/10/29 15:48:37 main.go:122: Event buffer initialized (offline capable)
+2025/10/29 15:48:37 main.go:210: Activity monitoring: ENABLED (interval: 30s)
+2025/10/29 15:48:37 usb_windows.go:78: USB Monitor started
+2025/10/29 15:48:37 activity_windows.go:65: Activity tracker started
+2025/10/29 15:48:37 main.go:236: USB monitoring: ENABLED
+2025/10/29 15:48:37 main.go:238: Shadow copy: ENABLED -> \\fs-04\USB\ADM-01
+2025/10/29 15:48:37 screenshot_windows.go:97: Screenshot Monitor started (interval: 15 minutes, quality: 75, immediate: true)
+2025/10/29 15:48:37 main.go:266: Screenshot capture: ENABLED (interval: 15m, quality: 75)
+2025/10/29 15:48:37 file_windows.go:88: File Monitor started
+2025/10/29 15:48:37 main.go:293: File monitoring: ENABLED (3 locations, thresholds: 100MB / 100 files)
+2025/10/29 15:48:37 main.go:306: WARNING: Keylogger enabled - ensure legal compliance!
+2025/10/29 15:48:37 keylogger_windows.go:123: Keylogger starting (monitoring: [chrome.exe firefox.exe msedge.exe], buffer: 1000 chars, interval: 5m)
+2025/10/29 15:48:37 file_windows.go:102: Monitoring location: C:\Users\a-kiv\Desktop
+2025/10/29 15:48:37 file_windows.go:102: Monitoring location: C:\Users\a-kiv\Documents
+2025/10/29 15:48:37 file_windows.go:102: Monitoring location: C:\Users\a-kiv\Downloads
+2025/10/29 15:48:37 keylogger_windows.go:202: Keyboard hook installed successfully
+2025/10/29 15:48:37 keylogger_windows.go:134: Keylogger started successfully
+2025/10/29 15:48:37 main.go:323: Keylogger: ENABLED (processes: [chrome.exe firefox.exe msedge.exe])
+2025/10/29 15:48:37 main.go:131: Agent is running with 5 active monitors...
+2025/10/29 15:48:37 main.go:133: Buffered events: 0
+2025/10/29 15:48:37 screenshot_windows.go:259: Screenshot captured: ADM-01_a-kiv_1761742117 (size: 167 KB, window: Administrator: Windows PowerShell)
+2025/10/29 15:48:37 screenshot_windows.go:149: Failed to send screenshot: server returned status 500
+2025/10/29 15:49:07 activity_windows.go:142: Activity captured: chrome.exe - Тестирование захвата текста агентом из строки поиска Яндекса — Яндекс: нашлось 2 млн результатов - Google Chrome
+2025/10/29 15:49:12 keylogger_windows.go:411: Sent keylog: chrome.exe - 16 keys in 9s
