@@ -74,7 +74,7 @@ services:
       dockerfile: ./server/Dockerfile
     container_name: monitoring-server
     ports:
-      - "8080:8080"
+      - "8081:8080"
     volumes:
       - ./server/config.yaml:/app/config.yaml
       - ./server/logs:/app/logs

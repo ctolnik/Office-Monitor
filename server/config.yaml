@@ -2,7 +2,7 @@
 
 server:
   host: "0.0.0.0"
-  port: 5000
+  port: 8080
   mode: "release"  # debug, release
   api_key: "${SERVER_API_KEY}"  # Master API key for admin access
 
