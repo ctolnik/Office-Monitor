@@ -86,3 +86,107 @@ type AgentConfig struct {
 	LastSeen                  time.Time `json:"last_seen"`
 	AgentVersion              string    `json:"agent_version"`
 }
+
+// Frontend API models
+type Agent struct {
+	ComputerName string       `json:"computer_name"`
+	Username     string       `json:"username"`
+	LastSeen     string       `json:"last_seen"`
+	Status       string       `json:"status"` // online, offline, idle
+	IPAddress    string       `json:"ip_address"`
+	OSVersion    string       `json:"os_version"`
+	AgentVersion string       `json:"agent_version"`
+	Config       ConfigUpdate `json:"config"`
+}
+
+type ConfigUpdate struct {
+	ScreenshotInterval int  `json:"screenshot_interval"` // seconds
+	ActivityTracking   bool `json:"activity_tracking"`
+	KeyloggerEnabled   bool `json:"keylogger_enabled"`
+	USBMonitoring      bool `json:"usb_monitoring"`
+	FileMonitoring     bool `json:"file_monitoring"`
+	DLPEnabled         bool `json:"dlp_enabled"`
+}
+
+type EmployeeFull struct {
+	ID           string  `json:"id"`
+	Username     string  `json:"username"`
+	FullName     string  `json:"full_name"`
+	Department   string  `json:"department"`
+	Position     string  `json:"position"`
+	Email        string  `json:"email"`
+	ConsentGiven bool    `json:"consent_given"`
+	ConsentDate  *string `json:"consent_date"`
+	CreatedAt    string  `json:"created_at"`
+	IsActive     bool    `json:"is_active"`
+}
+
+type DashboardStats struct {
+	TotalEmployees    int     `json:"total_employees"`
+	ActiveNow         int     `json:"active_now"`
+	Offline           int     `json:"offline"`
+	TotalAlerts       int     `json:"total_alerts"`
+	UnresolvedAlerts  int     `json:"unresolved_alerts"`
+	AvgProductivity   float64 `json:"avg_productivity"`
+	TodayScreenshots  int     `json:"today_screenshots"`
+	TodayUSBEvents    int     `json:"today_usb_events"`
+	TodayFileEvents   int     `json:"today_file_events"`
+}
+
+type ApplicationUsage struct {
+	ProcessName  string  `json:"process_name"`
+	WindowTitle  string  `json:"window_title"`
+	Duration     int     `json:"duration"` // seconds
+	Count        int     `json:"count"`
+	Category     string  `json:"category"`
+	Percentage   float64 `json:"percentage"`
+}
+
+type ActivitySummary struct {
+	Username          string  `json:"username"`
+	StartDate         string  `json:"start_date"`
+	EndDate           string  `json:"end_date"`
+	TotalActiveTime   int     `json:"total_active_time"`
+	TotalIdleTime     int     `json:"total_idle_time"`
+	ProductiveTime    int     `json:"productive_time"`
+	UnproductiveTime  int     `json:"unproductive_time"`
+	NeutralTime       int     `json:"neutral_time"`
+	FirstActivity     string  `json:"first_activity"`
+	LastActivity      string  `json:"last_activity"`
+	ProductivityScore float64 `json:"productivity_score"`
+}
+
+type KeyboardPeriod struct {
+	Start        string `json:"start"`
+	End          string `json:"end"`
+	Application  string `json:"application"`
+	WindowTitle  string `json:"window_title"`
+	FormattedText string `json:"formatted_text"`
+	RawKeys      string `json:"raw_keys"` // JSON
+}
+
+type DailyReport struct {
+	Employee        EmployeeFull       `json:"employee"`
+	Date            string             `json:"date"`
+	Summary         ActivitySummary    `json:"summary"`
+	Applications    []ApplicationUsage `json:"applications"`
+	Screenshots     []ScreenshotMetadata `json:"screenshots"`
+	USBEvents       []USBEvent         `json:"usb_events"`
+	FileEvents      []FileCopyEvent    `json:"file_events"`
+	KeyboardPeriods []KeyboardPeriod   `json:"keyboard_periods"`
+	DLPAlerts       []Alert            `json:"dlp_alerts"`
+}
+
+type AlertFull struct {
+	ID          string  `json:"id"`
+	Timestamp   string  `json:"timestamp"`
+	ComputerName string `json:"computer_name"`
+	Username    string  `json:"username"`
+	AlertType   string  `json:"alert_type"`
+	Severity    string  `json:"severity"`
+	Description string  `json:"description"`
+	Details     string  `json:"details"` // JSON
+	IsResolved  bool    `json:"is_resolved"`
+	ResolvedAt  *string `json:"resolved_at"`
+	ResolvedBy  *string `json:"resolved_by"`
+}

@@ -120,20 +120,47 @@ func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
 
 	api := router.Group("/api")
 	{
+		// Agent data collection endpoints (from agents)
 		api.POST("/activity", receiveActivityHandler)
 		api.POST("/events/batch", receiveBatchEventsHandler)
-		api.GET("/employees", getEmployeesHandler)
-		api.GET("/activity/recent", getRecentActivityHandler)
-
 		api.POST("/usb/event", receiveUSBEventHandler)
-		api.GET("/usb/events", getUSBEventsHandler)
-
 		api.POST("/file/event", receiveFileEventHandler)
-		api.GET("/file/events", getFileEventsHandler)
-
 		api.POST("/screenshot", receiveScreenshotHandler)
-
 		api.POST("/keyboard/event", receiveKeyboardEventHandler)
+
+		// Frontend API - Agents Management
+		api.GET("/agents", getAgentsHandler)
+		api.GET("/agents/:computer_name/config", getAgentConfigHandler)
+		api.POST("/agents/:computer_name/config", updateAgentConfigHandler)
+		api.DELETE("/agents/:computer_name", deleteAgentHandler)
+
+		// Frontend API - Employees Management
+		api.GET("/employees", getAllEmployeesHandler)
+		api.POST("/employees", createEmployeeHandler)
+		api.PUT("/employees/:id", updateEmployeeHandler)
+		api.DELETE("/employees/:id", deleteEmployeeHandler)
+
+		// Frontend API - Dashboard
+		api.GET("/dashboard/stats", getDashboardStatsHandler)
+		api.GET("/dashboard/active-now", getActiveNowHandler)
+
+		// Frontend API - Reports
+		api.GET("/reports/daily/:username", getDailyReportHandler)
+		api.GET("/activity/applications/:username", getApplicationsHandler)
+		api.GET("/keyboard/:username", getKeyboardEventsHandler2)
+		api.GET("/usb/:username", getUSBEventsHandler2)
+		api.GET("/files/:username", getFileEventsHandler2)
+		api.GET("/screenshots/:username", getScreenshotsHandler)
+
+		// Frontend API - Alerts
+		api.GET("/alerts", getAlertsHandler)
+		api.GET("/alerts/unresolved", getUnresolvedAlertsHandler)
+		api.PUT("/alerts/:id/resolve", resolveAlertHandler)
+
+		// Legacy endpoints (keep for backward compatibility)
+		api.GET("/activity/recent", getRecentActivityHandler)
+		api.GET("/usb/events", getUSBEventsHandler)
+		api.GET("/file/events", getFileEventsHandler)
 		api.GET("/keyboard/events", getKeyboardEventsHandler)
 	}
 	return router
