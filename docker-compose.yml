@@ -74,7 +74,7 @@ services:
       dockerfile: ./server/Dockerfile
     container_name: monitoring-server
     ports:
-      - "5500:5000"
+      - "8080:8080"
     volumes:
       - ./server/config.yaml:/app/config.yaml
       - ./server/logs:/app/logs
@@ -92,6 +92,42 @@ services:
     networks:
       - monitoring-network
     restart: unless-stopped
+
+  # Frontend (React application)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api
+    container_name: monitoring-frontend
+    depends_on:
+      - server
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: monitoring-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - server
+      - frontend
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 networks:
   monitoring-network:
