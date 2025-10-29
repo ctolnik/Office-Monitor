@@ -133,10 +133,12 @@ CREATE TABLE IF NOT EXISTS monitoring.employees (
     username String,
     full_name String,
     department String,
+    position String DEFAULT '',
     email String,
+    consent_given UInt8 DEFAULT 0,
+    consent_date Nullable(DateTime),
     is_active UInt8 DEFAULT 1,
     monitoring_enabled UInt8 DEFAULT 1,
-    consent_date DateTime,
     created_at DateTime DEFAULT now()
 ) ENGINE = ReplacingMergeTree(created_at)
 ORDER BY (computer_name, username);

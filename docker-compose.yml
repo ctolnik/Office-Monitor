@@ -116,7 +116,6 @@ services:
       # - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./frontend/dist:/usr/share/nginx/html:ro
     depends_on:
       - server
       - frontend
