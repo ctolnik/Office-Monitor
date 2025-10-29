@@ -18,6 +18,7 @@ func TestScreenshotMonitorCreation(t *testing.T) {
 		500,
 		true,
 		true,
+		nil, // httpClient
 	)
 
 	if monitor == nil {
@@ -72,6 +73,7 @@ func TestGetForegroundWindowTitle(t *testing.T) {
 		500,
 		false,
 		true,
+		nil, // httpClient
 	)
 
 	title := monitor.getForegroundWindowTitle()
@@ -93,6 +95,7 @@ func TestScreenshotBuffering(t *testing.T) {
 		500,
 		false,
 		false,
+		nil, // httpClient
 	)
 
 	if monitor.uploadImmediately {

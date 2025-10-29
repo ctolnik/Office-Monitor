@@ -39,8 +39,8 @@ type ActivityEvent struct {
 	WindowTitle  string    `json:"window_title"`
 	ProcessName  string    `json:"process_name"`
 	ProcessPath  string    `json:"process_path"`
-	DurationSec  int       `json:"duration_seconds"`
-	IdleTimeSec  int       `json:"idle_time_seconds"`
+	Duration     uint32    `json:"duration"`
+	IdleTime     uint32    `json:"idle_time"`
 }
 
 // NewActivityTracker creates a new activity tracker
@@ -118,8 +118,8 @@ func (t *ActivityTracker) captureActivity(ctx context.Context) error {
 		WindowTitle:  windowTitle,
 		ProcessName:  processName,
 		ProcessPath:  processPath,
-		DurationSec:  duration,
-		IdleTimeSec:  int(idleTime.Seconds()),
+		Duration:     uint32(duration),
+		IdleTime:     uint32(idleTime.Seconds()),
 	}
 
 	// Add to buffer (will be sent when server is available)

@@ -17,6 +17,7 @@ func TestUSBMonitorCreation(t *testing.T) {
 		"",
 		nil,
 		nil,
+		nil, // eventBuffer
 	)
 
 	if monitor == nil {
@@ -33,6 +34,7 @@ func TestUSBMonitorWithShadowCopy(t *testing.T) {
 		"\\\\server\\shadow",
 		[]string{".pdf", ".docx", ".xlsx"},
 		[]string{"System Volume Information"},
+		nil, // eventBuffer
 	)
 
 	if monitor == nil {

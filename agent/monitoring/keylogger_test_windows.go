@@ -18,6 +18,7 @@ func TestKeyloggerCreation(t *testing.T) {
 		processes,
 		1000,
 		5,
+		nil, // eventBuffer
 	)
 
 	if keylogger == nil {
@@ -51,6 +52,7 @@ func TestShouldMonitorProcess(t *testing.T) {
 		processes,
 		1000,
 		5,
+		nil, // eventBuffer
 	)
 
 	testCases := []struct {
@@ -106,6 +108,7 @@ func TestVkCodeToChar(t *testing.T) {
 		[]string{"chrome.exe"},
 		1000,
 		5,
+		nil, // eventBuffer
 	)
 
 	testCases := []struct {
@@ -136,6 +139,7 @@ func TestBufferManagement(t *testing.T) {
 		[]string{"chrome.exe"},
 		100,
 		5,
+		nil, // eventBuffer
 	)
 
 	if keylogger.currentBuffer == nil {

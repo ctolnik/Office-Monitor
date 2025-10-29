@@ -5,7 +5,6 @@ package monitoring
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"

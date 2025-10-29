@@ -8,7 +8,9 @@ type ActivityEvent struct {
 	Username     string    `json:"username"`
 	WindowTitle  string    `json:"window_title"`
 	ProcessName  string    `json:"process_name"`
+	ProcessPath  string    `json:"process_path"`
 	Duration     uint32    `json:"duration"`
+	IdleTime     uint32    `json:"idle_time"`
 }
 
 type KeyboardEvent struct {

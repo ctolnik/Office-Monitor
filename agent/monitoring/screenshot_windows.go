@@ -4,9 +4,7 @@
 package monitoring
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -16,6 +14,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"bytes"
 
 	"github.com/ctolnik/Office-Monitor/agent/httpclient"
 )

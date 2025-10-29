@@ -19,6 +19,7 @@ func TestFileMonitorCreation(t *testing.T) {
 		100,  // 100 MB threshold
 		1000, // 1000 files threshold
 		true,
+		nil, // eventBuffer
 	)
 
 	if monitor == nil {
@@ -35,6 +36,7 @@ func TestFileActivityTracking(t *testing.T) {
 		50,
 		500,
 		false,
+		nil, // eventBuffer
 	)
 
 	// Manually create activity to test GetStats

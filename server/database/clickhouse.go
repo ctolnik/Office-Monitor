@@ -41,13 +41,14 @@ func New(host string, port int, database, username, password string) (*Database,
 
 func (db *Database) InsertActivityEvent(ctx context.Context, event ActivityEvent) error {
 	query := `INSERT INTO monitoring.activity_events 
-                (timestamp, computer_name, username, window_title, process_name, duration)
-                VALUES (?, ?, ?, ?, ?, ?)`
+                (timestamp, computer_name, username, window_title, process_name, process_path, duration, idle_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	start := time.Now()
 	err := db.conn.Exec(ctx, query,
 		event.Timestamp, event.ComputerName, event.Username,
-		event.WindowTitle, event.ProcessName, event.Duration)
+		event.WindowTitle, event.ProcessName, event.ProcessPath,
+		event.Duration, event.IdleTime)
 
 	duration := time.Since(start)
 	if err != nil {
@@ -182,7 +183,7 @@ func (db *Database) GetActiveEmployees(ctx context.Context) ([]Employee, error) 
 }
 
 func (db *Database) GetRecentActivity(ctx context.Context, limit int) ([]ActivityEvent, error) {
-	query := `SELECT timestamp, computer_name, username, window_title, process_name, duration
+	query := `SELECT timestamp, computer_name, username, window_title, process_name, process_path, duration, idle_time
                 FROM monitoring.activity_events
                 ORDER BY timestamp DESC
                 LIMIT ?`
@@ -203,7 +204,8 @@ func (db *Database) GetRecentActivity(ctx context.Context, limit int) ([]Activit
 	for rows.Next() {
 		var e ActivityEvent
 		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username,
-			&e.WindowTitle, &e.ProcessName, &e.Duration); err != nil {
+			&e.WindowTitle, &e.ProcessName, &e.ProcessPath,
+			&e.Duration, &e.IdleTime); err != nil {
 			continue
 		}
 		events = append(events, e)

@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS monitoring.activity_events (
     username String,
     window_title String,
     process_name String,
+    process_path String,
     duration UInt32,
+    idle_time UInt32,
     event_date Date DEFAULT toDate(timestamp)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(event_date)
