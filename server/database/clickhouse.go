@@ -178,22 +178,6 @@ func (db *Database) GetActiveEmployees(ctx context.Context) ([]Employee, error) 
 		)
 	}
 
-	a := Employee{
-		ComputerName: "Stub",
-		Username:     "kokov",
-		LastSeen:     start,
-		Status:       "active",
-	}
-
-	b := Employee{
-		ComputerName: "Acc-02",
-		Username:     "GA\\suka",
-		LastSeen:     start,
-		Status:       "active",
-	}
-	employees = append(employees, a)
-	employees = append(employees, b)
-
 	return employees, rows.Err()
 }
 
@@ -224,27 +208,6 @@ func (db *Database) GetRecentActivity(ctx context.Context, limit int) ([]Activit
 		}
 		events = append(events, e)
 	}
-
-	a := ActivityEvent{
-		Timestamp:    start,
-		ComputerName: "Stub",
-		Username:     "kokov",
-		WindowTitle:  "The game",
-		ProcessName:  "porno.exe",
-		Duration:     7,
-	}
-	events = append(events, a)
-
-	b := ActivityEvent{
-		Timestamp:    start,
-		ComputerName: "Stub-2",
-		Username:     "Dima",
-		WindowTitle:  "The Work",
-		ProcessName:  "word.exe",
-		Duration:     5,
-	}
-	events = append(events, a)
-	events = append(events, b)
 
 	duration := time.Since(start)
 	if duration > 200*time.Millisecond {
