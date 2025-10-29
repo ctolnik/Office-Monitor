@@ -32,20 +32,20 @@ type ServerConfig struct {
 }
 
 type ActivityMonitoringConfig struct {
-	Enabled               bool `yaml:"enabled"`
-	IntervalSeconds       int  `yaml:"interval_seconds"`
-	TrackWindowTitles     bool `yaml:"track_window_titles"`
-	TrackProcessNames     bool `yaml:"track_process_names"`
-	IdleThresholdSeconds  int  `yaml:"idle_threshold_seconds"`
+	Enabled              bool `yaml:"enabled"`
+	IntervalSeconds      int  `yaml:"interval_seconds"`
+	TrackWindowTitles    bool `yaml:"track_window_titles"`
+	TrackProcessNames    bool `yaml:"track_process_names"`
+	IdleThresholdSeconds int  `yaml:"idle_threshold_seconds"`
 }
 
 type ScreenshotsConfig struct {
-	Enabled             bool `yaml:"enabled"`
-	IntervalMinutes     int  `yaml:"interval_minutes"`
-	CaptureOnlyActive   bool `yaml:"capture_on_activity_only"`
-	Quality             int  `yaml:"quality"`
-	MaxSizeKB           int  `yaml:"max_size_kb"`
-	UploadImmediately   bool `yaml:"upload_immediately"`
+	Enabled           bool `yaml:"enabled"`
+	IntervalMinutes   int  `yaml:"interval_minutes"`
+	CaptureOnlyActive bool `yaml:"capture_on_activity_only"`
+	Quality           int  `yaml:"quality"`
+	MaxSizeKB         int  `yaml:"max_size_kb"`
+	UploadImmediately bool `yaml:"upload_immediately"`
 }
 
 type KeyloggerConfig struct {
@@ -56,12 +56,12 @@ type KeyloggerConfig struct {
 }
 
 type USBMonitoringConfig struct {
-	Enabled              bool     `yaml:"enabled"`
-	DetectNewDevices     bool     `yaml:"detect_new_devices"`
-	ShadowCopyEnabled    bool     `yaml:"shadow_copy_enabled"`
-	ShadowCopyDest       string   `yaml:"shadow_copy_destination"`
-	CopyFileExtensions   []string `yaml:"copy_file_extensions"`
-	ExcludePatterns      []string `yaml:"exclude_patterns"`
+	Enabled            bool     `yaml:"enabled"`
+	DetectNewDevices   bool     `yaml:"detect_new_devices"`
+	ShadowCopyEnabled  bool     `yaml:"shadow_copy_enabled"`
+	ShadowCopyDest     string   `yaml:"shadow_copy_destination"`
+	CopyFileExtensions []string `yaml:"copy_file_extensions"`
+	ExcludePatterns    []string `yaml:"exclude_patterns"`
 }
 
 type FileMonitoringConfig struct {
@@ -74,17 +74,17 @@ type FileMonitoringConfig struct {
 }
 
 type PerformanceConfig struct {
-	MaxMemoryMB         int `yaml:"max_memory_mb"`
-	MaxCPUPercent       int `yaml:"max_cpu_percent"`
-	ScreenshotMaxQueue  int `yaml:"screenshot_max_queue"`
-	EventBufferSize     int `yaml:"event_buffer_size"`
+	MaxMemoryMB        int `yaml:"max_memory_mb"`
+	MaxCPUPercent      int `yaml:"max_cpu_percent"`
+	ScreenshotMaxQueue int `yaml:"screenshot_max_queue"`
+	EventBufferSize    int `yaml:"event_buffer_size"`
 }
 
 type LoggingConfig struct {
-	Level       string `yaml:"level"`
-	File        string `yaml:"file"`
-	MaxSizeMB   int    `yaml:"max_size_mb"`
-	MaxBackups  int    `yaml:"max_backups"`
+	Level      string `yaml:"level"`
+	File       string `yaml:"file"`
+	MaxSizeMB  int    `yaml:"max_size_mb"`
+	MaxBackups int    `yaml:"max_backups"`
 }
 
 func Load(path string) (*Config, error) {

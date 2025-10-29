@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package monitoring
@@ -9,7 +10,7 @@ import (
 
 func TestKeyloggerCreation(t *testing.T) {
 	processes := []string{"chrome.exe", "firefox.exe", "msedge.exe"}
-	
+
 	keylogger := NewKeylogger(
 		"http://localhost:5000",
 		"TEST-PC",
@@ -42,7 +43,7 @@ func TestKeyloggerCreation(t *testing.T) {
 
 func TestShouldMonitorProcess(t *testing.T) {
 	processes := []string{"chrome.exe", "firefox.exe"}
-	
+
 	keylogger := NewKeylogger(
 		"http://localhost:5000",
 		"TEST-PC",

@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 package monitoring
@@ -10,8 +11,8 @@ import (
 type FileMonitor struct{}
 
 type FileActivity struct {
-	Location      string
-	FileCount     int
+	Location       string
+	FileCount      int
 	TotalSizeBytes int64
 }
 

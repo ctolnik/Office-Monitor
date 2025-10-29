@@ -33,3 +33,4 @@ go.work.sum
 server/main
 .DS_Store
 WARP.md
+/docs

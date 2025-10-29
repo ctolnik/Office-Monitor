@@ -55,14 +55,14 @@ type ScreenshotMetadata struct {
 }
 
 type Alert struct {
-	Timestamp       time.Time `json:"timestamp"`
-	ComputerName    string    `json:"computer_name"`
-	Username        string    `json:"username"`
-	AlertType       string    `json:"alert_type"`
-	Severity        string    `json:"severity"`
-	Description     string    `json:"description"`
-	Metadata        string    `json:"metadata"`
-	IsAcknowledged  bool      `json:"is_acknowledged"`
+	Timestamp      time.Time `json:"timestamp"`
+	ComputerName   string    `json:"computer_name"`
+	Username       string    `json:"username"`
+	AlertType      string    `json:"alert_type"`
+	Severity       string    `json:"severity"`
+	Description    string    `json:"description"`
+	Metadata       string    `json:"metadata"`
+	IsAcknowledged bool      `json:"is_acknowledged"`
 }
 
 type Employee struct {
@@ -73,14 +73,14 @@ type Employee struct {
 }
 
 type AgentConfig struct {
-	ComputerName                 string    `json:"computer_name"`
-	APIKey                       string    `json:"api_key"`
-	ScreenshotEnabled            bool      `json:"screenshot_enabled"`
-	ScreenshotIntervalMinutes    int       `json:"screenshot_interval_minutes"`
-	KeyloggerEnabled             bool      `json:"keylogger_enabled"`
-	USBMonitoringEnabled         bool      `json:"usb_monitoring_enabled"`
-	FileCopyMonitoringEnabled    bool      `json:"file_copy_monitoring_enabled"`
-	LargeCopyThresholdMB         int       `json:"large_copy_threshold_mb"`
-	LastSeen                     time.Time `json:"last_seen"`
-	AgentVersion                 string    `json:"agent_version"`
+	ComputerName              string    `json:"computer_name"`
+	APIKey                    string    `json:"api_key"`
+	ScreenshotEnabled         bool      `json:"screenshot_enabled"`
+	ScreenshotIntervalMinutes int       `json:"screenshot_interval_minutes"`
+	KeyloggerEnabled          bool      `json:"keylogger_enabled"`
+	USBMonitoringEnabled      bool      `json:"usb_monitoring_enabled"`
+	FileCopyMonitoringEnabled bool      `json:"file_copy_monitoring_enabled"`
+	LargeCopyThresholdMB      int       `json:"large_copy_threshold_mb"`
+	LastSeen                  time.Time `json:"last_seen"`
+	AgentVersion              string    `json:"agent_version"`
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -95,10 +96,12 @@ func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
 	router.Static("/static", static)
 
 	router.GET("/", indexHandler)
+	router.GET("/health", healthHandler)
 
 	api := router.Group("/api")
 	{
 		api.POST("/activity", receiveActivityHandler)
+		api.POST("/events/batch", receiveBatchEventsHandler)
 		api.GET("/employees", getEmployeesHandler)
 		api.GET("/activity/recent", getRecentActivityHandler)
 
@@ -161,6 +164,13 @@ func loggerMiddleware(logger *zap.Logger) gin.HandlerFunc {
 
 func indexHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", nil)
+}
+
+func healthHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "ok",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
 }
 
 func receiveActivityHandler(c *gin.Context) {
@@ -426,4 +436,108 @@ func getKeyboardEventsHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, events)
+}
+
+func receiveBatchEventsHandler(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var payload struct {
+		Events []struct {
+			Type      string          `json:"type"`
+			Timestamp time.Time       `json:"timestamp"`
+			Data      json.RawMessage `json:"data"`
+		} `json:"events"`
+	}
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		zapctx.Warn(ctx, "Invalid batch request",
+			zap.Error(err),
+			zap.String("remote_addr", c.ClientIP()),
+		)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if len(payload.Events) == 0 {
+		c.JSON(http.StatusOK, gin.H{"status": "success", "processed": 0})
+		return
+	}
+
+	zapctx.Info(ctx, "Received batch events",
+		zap.Int("count", len(payload.Events)),
+		zap.String("remote_addr", c.ClientIP()),
+	)
+
+	processed := 0
+	failed := 0
+
+	for _, event := range payload.Events {
+		var err error
+
+		switch event.Type {
+		case "activity":
+			var actEvent database.ActivityEvent
+			if err = json.Unmarshal(event.Data, &actEvent); err == nil {
+				if actEvent.Timestamp.IsZero() {
+					actEvent.Timestamp = event.Timestamp
+				}
+				err = db.InsertActivityEvent(ctx, actEvent)
+			}
+
+		case "usb":
+			var usbEvent database.USBEvent
+			if err = json.Unmarshal(event.Data, &usbEvent); err == nil {
+				if usbEvent.Timestamp.IsZero() {
+					usbEvent.Timestamp = event.Timestamp
+				}
+				err = db.InsertUSBEvent(ctx, usbEvent)
+			}
+
+		case "file":
+			var fileEvent database.FileCopyEvent
+			if err = json.Unmarshal(event.Data, &fileEvent); err == nil {
+				if fileEvent.Timestamp.IsZero() {
+					fileEvent.Timestamp = event.Timestamp
+				}
+				err = db.InsertFileCopyEvent(ctx, fileEvent)
+			}
+
+		case "keyboard":
+			var kbEvent database.KeyboardEvent
+			if err = json.Unmarshal(event.Data, &kbEvent); err == nil {
+				if kbEvent.Timestamp.IsZero() {
+					kbEvent.Timestamp = event.Timestamp
+				}
+				err = db.InsertKeyboardEvent(ctx, kbEvent)
+			}
+
+		default:
+			zapctx.Warn(ctx, "Unknown event type in batch",
+				zap.String("type", event.Type),
+			)
+			failed++
+			continue
+		}
+
+		if err != nil {
+			zapctx.Error(ctx, "Failed to insert batch event",
+				zap.Error(err),
+				zap.String("type", event.Type),
+			)
+			failed++
+		} else {
+			processed++
+		}
+	}
+
+	zapctx.Info(ctx, "Batch events processed",
+		zap.Int("processed", processed),
+		zap.Int("failed", failed),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"processed": processed,
+		"failed":    failed,
+	})
 }
