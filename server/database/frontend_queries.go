@@ -391,11 +391,17 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 	for rows.Next() {
 		var app ApplicationUsage
 		if err := rows.Scan(&app.ProcessName, &app.WindowTitle, &app.Duration, &app.Count); err != nil {
+			zapctx.Error(ctx, "Failed to scan row", zap.Error(err))
 			continue
 		}
 		app.Category = "neutral" // Default category
 		totalDuration += app.Duration
 		tempApps = append(tempApps, app)
+	}
+
+	if err := rows.Err(); err != nil {
+		zapctx.Error(ctx, "Error iterating rows", zap.Error(err))
+		return nil, err
 	}
 
 	// Second pass: calculate percentages
@@ -410,7 +416,7 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 		zap.Int("result_count", len(apps)),
 		zap.Int("total_duration", totalDuration))
 
-	return apps, rows.Err()
+	return apps, nil
 }
 
 // GetAlerts returns alerts with optional filtering
