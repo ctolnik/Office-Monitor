@@ -206,9 +206,10 @@ func getDailyReportHandler(c *gin.Context) {
 	var date time.Time
 	var err error
 	if dateStr == "" {
-		date = time.Now()
+		date = time.Now().In(appLocation)
 	} else {
-		date, err = time.Parse("2006-01-02", dateStr)
+		// Parse date in app timezone
+		date, err = time.ParseInLocation("2006-01-02", dateStr, appLocation)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format, use YYYY-MM-DD"})
 			return

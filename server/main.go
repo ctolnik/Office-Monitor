@@ -20,9 +20,10 @@ import (
 )
 
 var (
-	db  *database.Database
-	st  *storage.Storage
-	cfg *config.Config
+	db          *database.Database
+	st          *storage.Storage
+	cfg         *config.Config
+	appLocation *time.Location // Application timezone from config
 )
 
 const (
@@ -42,6 +43,21 @@ func main() {
 		logger.Fatal("Failed to load config", zap.Error(err))
 	}
 	fmt.Println(cfg)
+	
+	// Load timezone from config
+	if cfg.Database.Timezone != "" {
+		appLocation, err = time.LoadLocation(cfg.Database.Timezone)
+		if err != nil {
+			logger.Warn("Failed to load timezone, using UTC", 
+				zap.String("timezone", cfg.Database.Timezone),
+				zap.Error(err))
+			appLocation = time.UTC
+		}
+	} else {
+		appLocation = time.UTC
+	}
+	logger.Info("Timezone loaded", zap.String("location", appLocation.String()))
+	
 	db, err = database.New(
 		cfg.Database.Host,
 		cfg.Database.Port,

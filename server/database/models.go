@@ -122,15 +122,15 @@ type EmployeeFull struct {
 }
 
 type DashboardStats struct {
-	TotalEmployees    int     `json:"total_employees"`
-	ActiveNow         int     `json:"active_now"`
-	Offline           int     `json:"offline"`
-	TotalAlerts       int     `json:"total_alerts"`
-	UnresolvedAlerts  int     `json:"unresolved_alerts"`
+	TotalEmployees    uint64  `json:"total_employees"`
+	ActiveNow         uint64  `json:"active_now"`
+	Offline           uint64  `json:"offline"`
+	TotalAlerts       uint64  `json:"total_alerts"`
+	UnresolvedAlerts  uint64  `json:"unresolved_alerts"`
 	AvgProductivity   float64 `json:"avg_productivity"`
-	TodayScreenshots  int     `json:"today_screenshots"`
-	TodayUSBEvents    int     `json:"today_usb_events"`
-	TodayFileEvents   int     `json:"today_file_events"`
+	TodayScreenshots  uint64  `json:"today_screenshots"`
+	TodayUSBEvents    uint64  `json:"today_usb_events"`
+	TodayFileEvents   uint64  `json:"today_file_events"`
 }
 
 type ApplicationUsage struct {
