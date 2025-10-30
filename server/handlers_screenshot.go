@@ -34,6 +34,9 @@ func getScreenshotHandler(c *gin.Context) {
 		return
 	}
 
-	zapctx.Debug(ctx, "Generated presigned URL for screenshot", zap.String("screenshot_id", screenshotID))
+	zapctx.Info(ctx, "Generated presigned URL for screenshot", 
+		zap.String("screenshot_id", screenshotID),
+		zap.String("object_name", objectName),
+		zap.String("url", url))
 	c.JSON(http.StatusOK, gin.H{"url": url})
 }

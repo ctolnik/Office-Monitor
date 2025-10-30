@@ -122,14 +122,22 @@ func (s *Storage) UploadUSBFile(ctx context.Context, computerName, relativePath 
 func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string) (string, error) {
 	// Use public client if available, otherwise use internal client
 	client := s.client
+	usingPublic := false
 	if s.publicClient != nil {
 		client = s.publicClient
+		usingPublic = true
+	}
+	
+	// Check if object exists before generating URL
+	_, err := client.StatObject(ctx, bucket, objectName, minio.StatObjectOptions{})
+	if err != nil {
+		return "", fmt.Errorf("object not found: %w", err)
 	}
 	
 	// Use time.Duration for expires parameter (1 hour)
 	url, err := client.PresignedGetObject(ctx, bucket, objectName, 3600*time.Second, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
+		return "", fmt.Errorf("failed to generate presigned URL (using_public=%v): %w", usingPublic, err)
 	}
 	
 	return url.String(), nil
