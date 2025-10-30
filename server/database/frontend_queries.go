@@ -374,8 +374,11 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 		ORDER BY total_duration DESC
 		LIMIT 50`
 
+	zapctx.Debug(ctx, "Executing query", zap.String("query", query))
+	
 	rows, err := db.conn.Query(ctx, query, username, startDate, endDate)
 	if err != nil {
+		zapctx.Error(ctx, "Query failed", zap.Error(err))
 		return nil, err
 	}
 	defer rows.Close()
@@ -402,6 +405,10 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 		}
 		apps = append(apps, app)
 	}
+
+	zapctx.Debug(ctx, "Query completed", 
+		zap.Int("result_count", len(apps)),
+		zap.Int("total_duration", totalDuration))
 
 	return apps, rows.Err()
 }
