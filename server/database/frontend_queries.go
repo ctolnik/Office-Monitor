@@ -349,17 +349,13 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 
 // GetApplicationUsage returns application usage statistics
 func (db *Database) GetApplicationUsage(ctx context.Context, username string, start, end time.Time) ([]ApplicationUsage, error) {
-	// Use date-based filtering - simpler and works with any timezone
-	startDate := start.Format("2006-01-02")
-	endDate := end.Format("2006-01-02")
-	
 	zapctx.Debug(ctx, "GetApplicationUsage called",
 		zap.String("username", username),
-		zap.String("start_date", startDate),
-		zap.String("end_date", endDate))
+		zap.Time("start", start),
+		zap.Time("end", end))
 	
-	// For single day reports, use simple toDate() comparison
-	// This works regardless of timezone issues
+	// Use timestamp range comparison with time.Time parameters
+	// The ClickHouse driver will handle timezone conversion based on session_timezone
 	query := `
 		SELECT 
 			process_name,
@@ -368,15 +364,15 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 			count(*) as count
 		FROM monitoring.activity_events
 		WHERE username = ? 
-		  AND toDate(timestamp) >= toDate(?)
-		  AND toDate(timestamp) < toDate(?)
+		  AND timestamp >= ?
+		  AND timestamp < ?
 		GROUP BY process_name, window_title
 		ORDER BY total_duration DESC
 		LIMIT 50`
 
 	zapctx.Debug(ctx, "Executing query", zap.String("query", query))
 	
-	rows, err := db.conn.Query(ctx, query, username, startDate, endDate)
+	rows, err := db.conn.Query(ctx, query, username, start, end)
 	if err != nil {
 		zapctx.Error(ctx, "Query failed", zap.Error(err))
 		return nil, err
