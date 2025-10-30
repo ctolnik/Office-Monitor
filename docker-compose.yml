@@ -102,7 +102,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=/api
+        - VITE_API_URL=
     container_name: monitoring-frontend
     environment:
       - TZ=Europe/Moscow
