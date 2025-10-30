@@ -358,8 +358,9 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 		zap.String("start", startStr),
 		zap.String("end", endStr))
 	
-	// Use toDateTime64 to match DateTime64(3) column type
-	query := `
+	// Use direct string interpolation for dates to avoid driver parameter conversion issues
+	// This is safe since timestamps are formatted from time.Time, not user input
+	query := fmt.Sprintf(`
 		SELECT 
 			process_name,
 			window_title,
@@ -367,15 +368,15 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 			count(*) as count
 		FROM monitoring.activity_events
 		WHERE username = ? 
-		  AND timestamp >= toDateTime64(?, 3)
-		  AND timestamp < toDateTime64(?, 3)
+		  AND timestamp >= toDateTime64('%s', 3)
+		  AND timestamp < toDateTime64('%s', 3)
 		GROUP BY process_name, window_title
 		ORDER BY total_duration DESC
-		LIMIT 50`
+		LIMIT 50`, startStr, endStr)
 
 	zapctx.Debug(ctx, "Executing query", zap.String("query", query))
 	
-	rows, err := db.conn.Query(ctx, query, username, startStr, endStr)
+	rows, err := db.conn.Query(ctx, query, username)
 	if err != nil {
 		zapctx.Error(ctx, "Query failed", zap.Error(err))
 		return nil, err
