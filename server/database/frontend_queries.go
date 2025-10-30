@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ctolnik/Office-Monitor/zapctx"
@@ -347,6 +348,88 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	return stats, nil
 }
 
+// categorizeApplication determines app category based on process name and window title
+func categorizeApplication(processName, windowTitle string) string {
+	processLower := strings.ToLower(processName)
+	titleLower := strings.ToLower(windowTitle)
+	
+	// Productive applications
+	productive := []string{
+		"code.exe", "idea", "pycharm", "goland", "webstorm", "rider", "clion",
+		"visualstudio.exe", "devenv.exe",
+		"notepad++.exe", "sublime", "atom.exe", "vim", "nano",
+		"datagrip", "dbeaver", "mysql", "postgres", "ssms.exe",
+		"docker", "postman", "insomnia",
+		"git", "fork.exe", "gitkraken",
+		"terminal", "cmd.exe", "powershell.exe", "bash", "mobaxterm.exe", "putty.exe",
+		"1cv8c.exe", "1cv8.exe", // 1C Development
+		"excel.exe", "winword.exe", "powerpnt.exe", // Office work
+		"notion", "obsidian", "onenote",
+	}
+	
+	// Communication apps
+	communication := []string{
+		"slack.exe", "teams.exe", "zoom.exe", "skype.exe",
+		"discord.exe", "telegram.exe", "whatsapp.exe",
+		"outlook.exe", "thunderbird.exe",
+	}
+	
+	// Unproductive / Entertainment
+	unproductive := []string{
+		"steam.exe", "epicgameslauncher.exe", "origin.exe",
+		"spotify.exe", "vlc.exe",
+		"netflix", "twitch",
+	}
+	
+	// Check productive
+	for _, app := range productive {
+		if strings.Contains(processLower, app) {
+			return "productive"
+		}
+	}
+	
+	// Check communication
+	for _, app := range communication {
+		if strings.Contains(processLower, app) {
+			return "communication"
+		}
+	}
+	
+	// Check unproductive
+	for _, app := range unproductive {
+		if strings.Contains(processLower, app) {
+			return "unproductive"
+		}
+	}
+	
+	// Chrome/Firefox special handling - categorize by site
+	if strings.Contains(processLower, "chrome.exe") || strings.Contains(processLower, "firefox.exe") || strings.Contains(processLower, "msedge.exe") {
+		// Productive sites
+		if strings.Contains(titleLower, "github") || strings.Contains(titleLower, "stackoverflow") ||
+			strings.Contains(titleLower, "gitlab") || strings.Contains(titleLower, "documentation") ||
+			strings.Contains(titleLower, "aws") || strings.Contains(titleLower, "azure") ||
+			strings.Contains(titleLower, "google cloud") || strings.Contains(titleLower, "jenkins") ||
+			strings.Contains(titleLower, "confluence") || strings.Contains(titleLower, "jira") {
+			return "productive"
+		}
+		
+		// Social media / entertainment
+		if strings.Contains(titleLower, "youtube") || strings.Contains(titleLower, "facebook") ||
+			strings.Contains(titleLower, "twitter") || strings.Contains(titleLower, "reddit") ||
+			strings.Contains(titleLower, "instagram") || strings.Contains(titleLower, "netflix") {
+			return "unproductive"
+		}
+	}
+	
+	// System processes
+	if strings.Contains(processLower, "explorer.exe") || strings.Contains(processLower, "taskmgr.exe") ||
+		strings.Contains(processLower, "system") {
+		return "system"
+	}
+	
+	return "neutral"
+}
+
 // GetApplicationUsage returns application usage statistics
 func (db *Database) GetApplicationUsage(ctx context.Context, username string, start, end time.Time) ([]ApplicationUsage, error) {
 	// Format timestamps as strings without timezone to match ClickHouse local time
@@ -394,7 +477,7 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 			zapctx.Error(ctx, "Failed to scan row", zap.Error(err))
 			continue
 		}
-		app.Category = "neutral" // Default category
+		app.Category = categorizeApplication(app.ProcessName, app.WindowTitle)
 		totalDuration += app.Duration
 		tempApps = append(tempApps, app)
 	}
