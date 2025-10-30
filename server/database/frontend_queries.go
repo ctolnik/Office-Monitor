@@ -384,7 +384,7 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 	defer rows.Close()
 
 	apps := make([]ApplicationUsage, 0)
-	var totalDuration int
+	var totalDuration uint64
 
 	// First pass: collect data and calculate total
 	tempApps := make([]ApplicationUsage, 0)
@@ -706,7 +706,7 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
 	}
 
 	// Calculate activity summary
-	var totalDuration int
+	var totalDuration uint64
 	for _, app := range report.Applications {
 		totalDuration += app.Duration
 	}
@@ -717,9 +717,9 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
 		EndDate:           endOfDay.Format(time.RFC3339),
 		TotalActiveTime:   totalDuration,
 		TotalIdleTime:     0,
-		ProductiveTime:    int(float64(totalDuration) * 0.7),
-		UnproductiveTime:  int(float64(totalDuration) * 0.2),
-		NeutralTime:       int(float64(totalDuration) * 0.1),
+		ProductiveTime:    uint64(float64(totalDuration) * 0.7),
+		UnproductiveTime:  uint64(float64(totalDuration) * 0.2),
+		NeutralTime:       uint64(float64(totalDuration) * 0.1),
 		FirstActivity:     startOfDay.Format(time.RFC3339),
 		LastActivity:      endOfDay.Format(time.RFC3339),
 		ProductivityScore: 75.0,

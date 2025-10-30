@@ -136,8 +136,8 @@ type DashboardStats struct {
 type ApplicationUsage struct {
 	ProcessName  string  `json:"process_name"`
 	WindowTitle  string  `json:"window_title"`
-	Duration     int     `json:"duration"` // seconds
-	Count        int     `json:"count"`
+	Duration     uint64  `json:"duration"` // seconds
+	Count        uint64  `json:"count"`
 	Category     string  `json:"category"`
 	Percentage   float64 `json:"percentage"`
 }
@@ -146,11 +146,11 @@ type ActivitySummary struct {
 	Username          string  `json:"username"`
 	StartDate         string  `json:"start_date"`
 	EndDate           string  `json:"end_date"`
-	TotalActiveTime   int     `json:"total_active_time"`
-	TotalIdleTime     int     `json:"total_idle_time"`
-	ProductiveTime    int     `json:"productive_time"`
-	UnproductiveTime  int     `json:"unproductive_time"`
-	NeutralTime       int     `json:"neutral_time"`
+	TotalActiveTime   uint64  `json:"total_active_time"`
+	TotalIdleTime     uint64  `json:"total_idle_time"`
+	ProductiveTime    uint64  `json:"productive_time"`
+	UnproductiveTime  uint64  `json:"unproductive_time"`
+	NeutralTime       uint64  `json:"neutral_time"`
 	FirstActivity     string  `json:"first_activity"`
 	LastActivity      string  `json:"last_activity"`
 	ProductivityScore float64 `json:"productivity_score"`
