@@ -414,7 +414,7 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 
 	zapctx.Debug(ctx, "Query completed", 
 		zap.Int("result_count", len(apps)),
-		zap.Int("total_duration", totalDuration))
+		zap.Uint64("total_duration", totalDuration))
 
 	return apps, nil
 }
