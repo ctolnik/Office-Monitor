@@ -169,6 +169,7 @@ type DailyReport struct {
 	Username        string               `json:"username"`
 	Date            string               `json:"date"`
 	Summary         ActivitySummary      `json:"summary"`
+	ActivityEvents  []ActivityEvent      `json:"activity_events"`
 	Applications    []ApplicationUsage   `json:"applications"`
 	Screenshots     []ScreenshotMetadata `json:"screenshots"`
 	USBEvents       []USBEvent           `json:"usb_events"`

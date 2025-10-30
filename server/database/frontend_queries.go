@@ -588,6 +588,46 @@ func (db *Database) GetScreenshotsByUsername(ctx context.Context, username strin
 	return screenshots, nil
 }
 
+// GetActivityEventsByUsername returns activity events for user in time range
+func (db *Database) GetActivityEventsByUsername(ctx context.Context, username string, start, end time.Time) ([]ActivityEvent, error) {
+	startStr := start.Format("2006-01-02 15:04:05")
+	endStr := end.Format("2006-01-02 15:04:05")
+	
+	query := fmt.Sprintf(`
+		SELECT timestamp, computer_name, username, window_title, process_name, process_path, duration, idle_time
+		FROM monitoring.activity_events
+		WHERE username = ? 
+		  AND timestamp >= toDateTime64('%s', 3)
+		  AND timestamp < toDateTime64('%s', 3)
+		ORDER BY timestamp ASC
+		LIMIT 10000`, startStr, endStr)
+
+	rows, err := db.conn.Query(ctx, query, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	events := make([]ActivityEvent, 0)
+	for rows.Next() {
+		var e ActivityEvent
+		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username,
+			&e.WindowTitle, &e.ProcessName, &e.ProcessPath,
+			&e.Duration, &e.IdleTime); err != nil {
+			zapctx.Error(ctx, "Failed to scan activity event row", zap.Error(err))
+			continue
+		}
+		events = append(events, e)
+	}
+
+	if err := rows.Err(); err != nil {
+		zapctx.Error(ctx, "Error iterating activity event rows", zap.Error(err))
+		return nil, err
+	}
+
+	return events, nil
+}
+
 // GetKeyboardEventsByUsername returns keyboard events for user in time range
 func (db *Database) GetKeyboardEventsByUsername(ctx context.Context, username string, start, end time.Time) ([]KeyboardEvent, error) {
 	query := `
@@ -630,6 +670,14 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
 
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	// Get activity events (for timeline)
+	activityEvents, err := db.GetActivityEventsByUsername(ctx, username, startOfDay, endOfDay)
+	if err != nil {
+		zapctx.Warn(ctx, "Failed to get activity events", zap.Error(err))
+		activityEvents = make([]ActivityEvent, 0)
+	}
+	report.ActivityEvents = activityEvents
 
 	// Get applications
 	apps, err := db.GetApplicationUsage(ctx, username, startOfDay, endOfDay)
@@ -713,8 +761,36 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
 
 	// Calculate activity summary
 	var totalDuration uint64
+	var productiveTime, unproductiveTime, neutralTime uint64
+	
+	// Calculate time by category
 	for _, app := range report.Applications {
 		totalDuration += app.Duration
+		switch app.Category {
+		case "productive":
+			productiveTime += app.Duration
+		case "unproductive":
+			unproductiveTime += app.Duration
+		default:
+			neutralTime += app.Duration
+		}
+	}
+	
+	// Calculate productivity score: (productive - unproductive) / total * 100
+	// Range: 0-100, where 50 is neutral
+	var productivityScore float64
+	if totalDuration > 0 {
+		productivityScore = (float64(productiveTime) / float64(totalDuration)) * 100
+	} else {
+		productivityScore = 0.0
+	}
+	
+	// Get actual first and last activity timestamps
+	firstActivity := startOfDay.Format(time.RFC3339)
+	lastActivity := endOfDay.Format(time.RFC3339)
+	if len(screenshots) > 0 {
+		firstActivity = screenshots[len(screenshots)-1].Timestamp.Format(time.RFC3339)
+		lastActivity = screenshots[0].Timestamp.Format(time.RFC3339)
 	}
 
 	report.Summary = ActivitySummary{
@@ -723,12 +799,12 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
 		EndDate:           endOfDay.Format(time.RFC3339),
 		TotalActiveTime:   totalDuration,
 		TotalIdleTime:     0,
-		ProductiveTime:    uint64(float64(totalDuration) * 0.7),
-		UnproductiveTime:  uint64(float64(totalDuration) * 0.2),
-		NeutralTime:       uint64(float64(totalDuration) * 0.1),
-		FirstActivity:     startOfDay.Format(time.RFC3339),
-		LastActivity:      endOfDay.Format(time.RFC3339),
-		ProductivityScore: 75.0,
+		ProductiveTime:    productiveTime,
+		UnproductiveTime:  unproductiveTime,
+		NeutralTime:       neutralTime,
+		FirstActivity:     firstActivity,
+		LastActivity:      lastActivity,
+		ProductivityScore: productivityScore,
 	}
 
 	return report, nil
