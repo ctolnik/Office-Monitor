@@ -166,15 +166,15 @@ type KeyboardPeriod struct {
 }
 
 type DailyReport struct {
-	Employee        EmployeeFull       `json:"employee"`
-	Date            string             `json:"date"`
-	Summary         ActivitySummary    `json:"summary"`
-	Applications    []ApplicationUsage `json:"applications"`
+	Username        string               `json:"username"`
+	Date            string               `json:"date"`
+	Summary         ActivitySummary      `json:"summary"`
+	Applications    []ApplicationUsage   `json:"applications"`
 	Screenshots     []ScreenshotMetadata `json:"screenshots"`
-	USBEvents       []USBEvent         `json:"usb_events"`
-	FileEvents      []FileCopyEvent    `json:"file_events"`
-	KeyboardPeriods []KeyboardPeriod   `json:"keyboard_periods"`
-	DLPAlerts       []Alert            `json:"dlp_alerts"`
+	USBEvents       []USBEvent           `json:"usb_events"`
+	FileEvents      []FileCopyEvent      `json:"file_events"`
+	KeyboardPeriods []KeyboardPeriod     `json:"keyboard_periods"`
+	DLPAlerts       []Alert              `json:"dlp_alerts"`
 }
 
 type AlertFull struct {

@@ -621,35 +621,11 @@ func (db *Database) GetKeyboardEventsByUsername(ctx context.Context, username st
 	return events, nil
 }
 
-// GetDailyReport generates a complete daily report for an employee
+// GetDailyReport generates a complete daily report for a user
 func (db *Database) GetDailyReport(ctx context.Context, username string, date time.Time) (*DailyReport, error) {
 	report := &DailyReport{
-		Date: date.Format("2006-01-02"),
-	}
-
-	// Get employee info
-	employees, err := db.GetAllEmployees(ctx)
-	if err == nil {
-		for _, emp := range employees {
-			if emp.Username == username {
-				report.Employee = emp
-				break
-			}
-		}
-	}
-
-	// If employee not found in database, create placeholder
-	if report.Employee.Username == "" {
-		report.Employee = EmployeeFull{
-			ID:           username,
-			Username:     username,
-			FullName:     username,
-			Department:   "Unknown",
-			Position:     "Unknown",
-			Email:        fmt.Sprintf("%s@company.com", username),
-			ConsentGiven: false,
-			IsActive:     true,
-		}
+		Username: username,
+		Date:     date.Format("2006-01-02"),
 	}
 
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())

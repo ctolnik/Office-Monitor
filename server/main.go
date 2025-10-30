@@ -20,10 +20,11 @@ import (
 )
 
 var (
-	db          *database.Database
-	st          *storage.Storage
-	cfg         *config.Config
-	appLocation *time.Location // Application timezone from config
+	db            *database.Database
+	st            *storage.Storage
+	storageClient *storage.Storage // Alias for handlers
+	cfg           *config.Config
+	appLocation   *time.Location // Application timezone from config
 )
 
 const (
@@ -83,6 +84,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to MinIO storage", zap.Error(err))
 	}
+	storageClient = st // Set alias for handlers
 	logger.Info("Storage initialized",
 		zap.String("endpoint", cfg.Storage.Endpoint),
 		zap.String("screenshots_bucket", cfg.Storage.Buckets.Screenshots),
@@ -171,6 +173,9 @@ func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
 		api.GET("/usb/:username", getUSBEventsHandler2)
 		api.GET("/files/:username", getFileEventsHandler2)
 		api.GET("/screenshots/:username", getScreenshotsHandler)
+		
+		// Frontend API - Screenshot retrieval
+		api.GET("/screenshot/:id", getScreenshotHandler)
 
 		// Frontend API - Alerts
 		api.GET("/alerts", getAlertsHandler)
