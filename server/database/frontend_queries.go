@@ -358,7 +358,7 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 		zap.String("start", startStr),
 		zap.String("end", endStr))
 	
-	// Use toDateTime to interpret string timestamps in ClickHouse local timezone
+	// Use toDateTime64 to match DateTime64(3) column type
 	query := `
 		SELECT 
 			process_name,
@@ -367,8 +367,8 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 			count(*) as count
 		FROM monitoring.activity_events
 		WHERE username = ? 
-		  AND timestamp >= toDateTime(?)
-		  AND timestamp < toDateTime(?)
+		  AND timestamp >= toDateTime64(?, 3)
+		  AND timestamp < toDateTime64(?, 3)
 		GROUP BY process_name, window_title
 		ORDER BY total_duration DESC
 		LIMIT 50`
