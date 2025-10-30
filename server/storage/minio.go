@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -94,7 +95,8 @@ func (s *Storage) UploadUSBFile(ctx context.Context, computerName, relativePath 
 }
 
 func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string) (string, error) {
-	url, err := s.client.PresignedGetObject(ctx, bucket, objectName, 3600, nil)
+	// Use time.Duration for expires parameter (1 hour)
+	url, err := s.client.PresignedGetObject(ctx, bucket, objectName, 3600*time.Second, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
 	}
