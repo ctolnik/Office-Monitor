@@ -73,6 +73,19 @@ func deleteAgentHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
+// ========== Users Handlers ==========
+
+func getAllUsersHandler(c *gin.Context) {
+	ctx := c.Request.Context()
+	users, err := db.GetAllUsers(ctx)
+	if err != nil {
+		zapctx.Error(ctx, "Failed to get users", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
+		return
+	}
+	c.JSON(http.StatusOK, users)
+}
+
 // ========== Employees Management Handlers ==========
 
 func getAllEmployeesHandler(c *gin.Context) {

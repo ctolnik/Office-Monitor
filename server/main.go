@@ -135,6 +135,9 @@ func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
 		api.POST("/agents/:computer_name/config", updateAgentConfigHandler)
 		api.DELETE("/agents/:computer_name", deleteAgentHandler)
 
+		// Frontend API - Users (from activity)
+		api.GET("/users", getAllUsersHandler)
+
 		// Frontend API - Employees Management
 		api.GET("/employees", getAllEmployeesHandler)
 		api.POST("/employees", createEmployeeHandler)

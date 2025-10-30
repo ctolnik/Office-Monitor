@@ -140,6 +140,32 @@ func (db *Database) DeleteAgent(ctx context.Context, computerName string) error 
 	return db.conn.Exec(ctx, query, computerName)
 }
 
+// GetAllUsers returns all unique users from activity_events
+func (db *Database) GetAllUsers(ctx context.Context) ([]string, error) {
+	query := `
+		SELECT DISTINCT username
+		FROM monitoring.activity_events
+		WHERE timestamp > now() - INTERVAL 30 DAY
+		ORDER BY username`
+
+	rows, err := db.conn.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]string, 0)
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			continue
+		}
+		users = append(users, username)
+	}
+
+	return users, rows.Err()
+}
+
 // GetAllEmployees returns all employees from employees table
 func (db *Database) GetAllEmployees(ctx context.Context) ([]EmployeeFull, error) {
 	query := `
@@ -241,11 +267,16 @@ func (db *Database) DeleteEmployee(ctx context.Context, username string) error {
 func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
 	stats := &DashboardStats{}
 
+	// Calculate time thresholds in Go
+	now := time.Now()
+	weekAgo := now.Add(-7 * 24 * time.Hour)
+	fiveMinAgo := now.Add(-5 * time.Minute)
+
 	// Total employees (unique usernames in last 7 days)
 	err := db.conn.QueryRow(ctx, `
 		SELECT count(DISTINCT username) 
 		FROM monitoring.activity_events 
-		WHERE timestamp > now() - INTERVAL 7 DAY`).Scan(&stats.TotalEmployees)
+		WHERE timestamp > ?`, weekAgo).Scan(&stats.TotalEmployees)
 	if err != nil {
 		zapctx.Warn(ctx, "Failed to get total employees", zap.Error(err))
 	}
@@ -254,7 +285,7 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	err = db.conn.QueryRow(ctx, `
 		SELECT count(DISTINCT username) 
 		FROM monitoring.activity_events 
-		WHERE timestamp > now() - INTERVAL 5 MINUTE`).Scan(&stats.ActiveNow)
+		WHERE timestamp > ?`, fiveMinAgo).Scan(&stats.ActiveNow)
 	if err != nil {
 		zapctx.Warn(ctx, "Failed to get active now", zap.Error(err))
 	}
@@ -262,11 +293,14 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	// Offline (total - active)
 	stats.Offline = stats.TotalEmployees - stats.ActiveNow
 
+	// Start of today
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
 	// Total alerts today
 	err = db.conn.QueryRow(ctx, `
 		SELECT count(*) 
 		FROM monitoring.alerts 
-		WHERE toDate(timestamp) = today()`).Scan(&stats.TotalAlerts)
+		WHERE timestamp >= ?`, todayStart).Scan(&stats.TotalAlerts)
 	if err != nil {
 		stats.TotalAlerts = 0
 	}
@@ -275,7 +309,7 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	err = db.conn.QueryRow(ctx, `
 		SELECT count(*) 
 		FROM monitoring.alerts 
-		WHERE is_acknowledged = false`).Scan(&stats.UnresolvedAlerts)
+		WHERE is_acknowledged = 0`).Scan(&stats.UnresolvedAlerts)
 	if err != nil {
 		stats.UnresolvedAlerts = 0
 	}
@@ -284,7 +318,7 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	err = db.conn.QueryRow(ctx, `
 		SELECT count(*) 
 		FROM monitoring.screenshot_metadata 
-		WHERE toDate(timestamp) = today()`).Scan(&stats.TodayScreenshots)
+		WHERE timestamp >= ?`, todayStart).Scan(&stats.TodayScreenshots)
 	if err != nil {
 		stats.TodayScreenshots = 0
 	}
@@ -293,7 +327,7 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	err = db.conn.QueryRow(ctx, `
 		SELECT count(*) 
 		FROM monitoring.usb_events 
-		WHERE toDate(timestamp) = today()`).Scan(&stats.TodayUSBEvents)
+		WHERE timestamp >= ?`, todayStart).Scan(&stats.TodayUSBEvents)
 	if err != nil {
 		stats.TodayUSBEvents = 0
 	}
@@ -302,7 +336,7 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	err = db.conn.QueryRow(ctx, `
 		SELECT count(*) 
 		FROM monitoring.file_copy_events 
-		WHERE toDate(timestamp) = today()`).Scan(&stats.TodayFileEvents)
+		WHERE timestamp >= ?`, todayStart).Scan(&stats.TodayFileEvents)
 	if err != nil {
 		stats.TodayFileEvents = 0
 	}
