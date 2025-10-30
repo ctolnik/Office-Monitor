@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/ctolnik/Office-Monitor/zapctx"
@@ -8,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// getScreenshotHandler returns a presigned URL for downloading a screenshot
+// getScreenshotHandler returns screenshot file directly (proxy from MinIO)
 func getScreenshotHandler(c *gin.Context) {
 	ctx := c.Request.Context()
 	screenshotID := c.Param("id")
@@ -27,16 +28,33 @@ func getScreenshotHandler(c *gin.Context) {
 	// Screenshot is stored in 'screenshots' bucket with name: COMPUTER_USERNAME_TIMESTAMP.jpg
 	objectName := screenshotID + ".jpg"
 
-	url, err := storageClient.GetPresignedURL(ctx, "screenshots", objectName)
+	// Get object from MinIO and stream it directly
+	object, err := storageClient.GetObject(ctx, "screenshots", objectName)
 	if err != nil {
-		zapctx.Error(ctx, "Failed to generate presigned URL", zap.Error(err), zap.String("screenshot_id", screenshotID))
+		zapctx.Error(ctx, "Failed to get screenshot from storage", zap.Error(err), zap.String("screenshot_id", screenshotID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get screenshot"})
 		return
 	}
+	defer object.Close()
 
-	zapctx.Info(ctx, "Generated presigned URL for screenshot", 
+	// Get object info for content type and size
+	stat, err := object.Stat()
+	if err != nil {
+		zapctx.Error(ctx, "Failed to stat screenshot", zap.Error(err), zap.String("screenshot_id", screenshotID))
+		c.JSON(http.StatusNotFound, gin.H{"error": "Screenshot not found"})
+		return
+	}
+
+	zapctx.Debug(ctx, "Serving screenshot", 
 		zap.String("screenshot_id", screenshotID),
 		zap.String("object_name", objectName),
-		zap.String("url", url))
-	c.JSON(http.StatusOK, gin.H{"url": url})
+		zap.Int64("size", stat.Size))
+
+	// Set headers
+	c.Header("Content-Type", "image/jpeg")
+	c.Header("Content-Length", fmt.Sprintf("%d", stat.Size))
+	c.Header("Cache-Control", "public, max-age=86400") // Cache for 1 day
+
+	// Stream the file
+	c.DataFromReader(http.StatusOK, stat.Size, "image/jpeg", object, nil)
 }

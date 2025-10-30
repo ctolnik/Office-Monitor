@@ -98,6 +98,15 @@ func (s *Storage) UploadUSBFile(ctx context.Context, computerName, relativePath 
 	return objectName, nil
 }
 
+func (s *Storage) GetObject(ctx context.Context, bucket, objectName string) (*minio.Object, error) {
+	// Get object from MinIO
+	object, err := s.client.GetObject(ctx, bucket, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object: %w", err)
+	}
+	return object, nil
+}
+
 func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string) (string, error) {
 	// Check if object exists before generating URL
 	_, err := s.client.StatObject(ctx, bucket, objectName, minio.StatObjectOptions{})
