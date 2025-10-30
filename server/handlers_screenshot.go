@@ -24,8 +24,8 @@ func getScreenshotHandler(c *gin.Context) {
 		return
 	}
 
-	// Screenshot path format: screenshots/COMPUTER_USERNAME_TIMESTAMP.jpg
-	objectName := "screenshots/" + screenshotID + ".jpg"
+	// Screenshot is stored in 'screenshots' bucket with name: COMPUTER_USERNAME_TIMESTAMP.jpg
+	objectName := screenshotID + ".jpg"
 
 	url, err := storageClient.GetPresignedURL(ctx, "screenshots", objectName)
 	if err != nil {

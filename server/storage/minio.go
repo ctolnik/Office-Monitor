@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -15,9 +16,10 @@ type Storage struct {
 	client            *minio.Client
 	screenshotsBucket string
 	usbCopiesBucket   string
+	publicEndpoint    string // External endpoint for presigned URLs
 }
 
-func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, usbCopiesBucket string) (*Storage, error) {
+func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, usbCopiesBucket, publicEndpoint string) (*Storage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -38,6 +40,7 @@ func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, 
 		client:            client,
 		screenshotsBucket: screenshotsBucket,
 		usbCopiesBucket:   usbCopiesBucket,
+		publicEndpoint:    publicEndpoint,
 	}
 
 	ctx := context.Background()
@@ -59,7 +62,8 @@ func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, 
 }
 
 func (s *Storage) UploadScreenshot(ctx context.Context, screenshotID string, data []byte) (string, error) {
-	objectName := fmt.Sprintf("screenshots/%s.jpg", screenshotID)
+	// Object is stored in bucket root with name: COMPUTER_USERNAME_TIMESTAMP.jpg
+	objectName := fmt.Sprintf("%s.jpg", screenshotID)
 
 	_, err := s.client.PutObject(
 		ctx,
@@ -100,5 +104,15 @@ func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
 	}
+	
+	// Replace internal endpoint with public endpoint if configured
+	if s.publicEndpoint != "" {
+		urlStr := url.String()
+		// URL format: http://minio:9000/bucket/object?params
+		// Replace internal endpoint with public endpoint
+		urlStr = strings.Replace(urlStr, s.client.EndpointURL().String(), s.publicEndpoint, 1)
+		return urlStr, nil
+	}
+	
 	return url.String(), nil
 }
