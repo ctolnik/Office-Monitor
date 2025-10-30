@@ -14,13 +14,11 @@ import (
 
 type Storage struct {
 	client            *minio.Client
-	publicClient      *minio.Client // Client with public endpoint for presigned URLs
 	screenshotsBucket string
 	usbCopiesBucket   string
-	publicEndpoint    string // External endpoint for presigned URLs
 }
 
-func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, usbCopiesBucket, publicEndpoint string) (*Storage, error) {
+func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, usbCopiesBucket string) (*Storage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -36,32 +34,11 @@ func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, 
 	if usbCopiesBucket == "" {
 		usbCopiesBucket = "usb-copies"
 	}
-	
-	// Create public client for presigned URLs if public endpoint is provided
-	var publicClient *minio.Client
-	if publicEndpoint != "" {
-		// Extract endpoint from public URL (e.g., "http://172.16.0.6:9100" -> "172.16.0.6:9100")
-		publicEndpointClean := strings.TrimPrefix(publicEndpoint, "http://")
-		publicEndpointClean = strings.TrimPrefix(publicEndpointClean, "https://")
-		
-		// Determine if public endpoint uses SSL
-		publicUseSSL := strings.HasPrefix(publicEndpoint, "https://")
-		
-		publicClient, err = minio.New(publicEndpointClean, &minio.Options{
-			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-			Secure: publicUseSSL,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create public MinIO client: %w", err)
-		}
-	}
 
 	s := &Storage{
 		client:            client,
-		publicClient:      publicClient,
 		screenshotsBucket: screenshotsBucket,
 		usbCopiesBucket:   usbCopiesBucket,
-		publicEndpoint:    publicEndpoint,
 	}
 
 	ctx := context.Background()
@@ -120,24 +97,17 @@ func (s *Storage) UploadUSBFile(ctx context.Context, computerName, relativePath 
 }
 
 func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string) (string, error) {
-	// Use public client if available, otherwise use internal client
-	client := s.client
-	usingPublic := false
-	if s.publicClient != nil {
-		client = s.publicClient
-		usingPublic = true
-	}
-	
 	// Check if object exists before generating URL
-	_, err := client.StatObject(ctx, bucket, objectName, minio.StatObjectOptions{})
+	_, err := s.client.StatObject(ctx, bucket, objectName, minio.StatObjectOptions{})
 	if err != nil {
 		return "", fmt.Errorf("object not found: %w", err)
 	}
 	
-	// Use time.Duration for expires parameter (1 hour)
-	url, err := client.PresignedGetObject(ctx, bucket, objectName, 3600*time.Second, nil)
+	// MinIO will use MINIO_SERVER_URL env var for generating presigned URLs
+	// This allows presigned URLs to use the public endpoint automatically
+	url, err := s.client.PresignedGetObject(ctx, bucket, objectName, 3600*time.Second, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned URL (using_public=%v): %w", usingPublic, err)
+		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
 	}
 	
 	return url.String(), nil
