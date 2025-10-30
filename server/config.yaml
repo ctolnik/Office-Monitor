@@ -16,6 +16,7 @@ database:
   username: "monitor_user"
   password: "change_me_in_production"
   # password: "${CLICKHOUSE_PASSWORD}"
+  timezone: "Europe/Moscow"  # Timezone for ClickHouse session
   max_open_conns: 10
   max_idle_conns: 5
 

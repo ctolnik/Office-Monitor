@@ -12,6 +12,7 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
+      TZ: Europe/Moscow
       CLICKHOUSE_DB: monitoring
       CLICKHOUSE_USER: monitor_user
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change_me_in_production}
@@ -34,6 +35,7 @@ services:
     volumes:
       - minio_data:/data
     environment:
+      TZ: Europe/Moscow
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change_me_in_production}
     command: server /data --console-address ":9001"
@@ -79,6 +81,7 @@ services:
       - ./server/config.yaml:/app/config.yaml
       - ./server/logs:/app/logs
     environment:
+      - TZ=Europe/Moscow
       - CONFIG_PATH=/app/config.yaml
       - CLICKHOUSE_HOST=clickhouse
       - MINIO_ENDPOINT=minio:9000
@@ -101,6 +104,8 @@ services:
       args:
         - VITE_API_URL=/api
     container_name: monitoring-frontend
+    environment:
+      - TZ=Europe/Moscow
     depends_on:
       - server
     networks:
@@ -116,6 +121,8 @@ services:
       # - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    environment:
+      - TZ=Europe/Moscow
     depends_on:
       - server
       - frontend

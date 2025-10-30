@@ -15,7 +15,10 @@ type Database struct {
 	conn driver.Conn
 }
 
-func New(host string, port int, database, username, password string) (*Database, error) {
+func New(host string, port int, database, username, password, timezone string) (*Database, error) {
+	if timezone == "" {
+		timezone = "UTC"
+	}
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%d", host, port)},
 		Auth: clickhouse.Auth{
@@ -25,6 +28,7 @@ func New(host string, port int, database, username, password string) (*Database,
 		},
 		Settings: clickhouse.Settings{
 			"max_execution_time": 60,
+			"session_timezone":   timezone,
 		},
 		DialTimeout: 10 * time.Second,
 	})

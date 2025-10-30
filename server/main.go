@@ -48,6 +48,7 @@ func main() {
 		cfg.Database.Database,
 		cfg.Database.Username,
 		cfg.Database.Password,
+		cfg.Database.Timezone,
 	)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
