@@ -349,6 +349,11 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 
 // GetApplicationUsage returns application usage statistics
 func (db *Database) GetApplicationUsage(ctx context.Context, username string, start, end time.Time) ([]ApplicationUsage, error) {
+	zapctx.Debug(ctx, "GetApplicationUsage called",
+		zap.String("username", username),
+		zap.Time("start", start),
+		zap.Time("end", end))
+	
 	query := `
 		SELECT 
 			process_name,
@@ -356,7 +361,7 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 			sum(duration) as total_duration,
 			count(*) as count
 		FROM monitoring.activity_events
-		WHERE username = ? AND timestamp >= ? AND timestamp <= ?
+		WHERE username = ? AND timestamp >= ? AND timestamp < ?
 		GROUP BY process_name, window_title
 		ORDER BY total_duration DESC
 		LIMIT 50`
