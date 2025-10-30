@@ -80,6 +80,7 @@ func main() {
 		cfg.Storage.UseSSL,
 		cfg.Storage.Buckets.Screenshots,
 		cfg.Storage.Buckets.USBCopies,
+		cfg.Storage.PublicEndpoint,
 	)
 	if err != nil {
 		logger.Fatal("Failed to connect to MinIO storage", zap.Error(err))
@@ -87,6 +88,7 @@ func main() {
 	storageClient = st // Set alias for handlers
 	logger.Info("Storage initialized",
 		zap.String("endpoint", cfg.Storage.Endpoint),
+		zap.String("public_endpoint", cfg.Storage.PublicEndpoint),
 		zap.String("screenshots_bucket", cfg.Storage.Buckets.Screenshots),
 		zap.String("usb_bucket", cfg.Storage.Buckets.USBCopies),
 	)

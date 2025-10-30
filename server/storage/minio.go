@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -15,9 +16,10 @@ type Storage struct {
 	client            *minio.Client
 	screenshotsBucket string
 	usbCopiesBucket   string
+	publicEndpoint    string // Public URL to replace in presigned URLs
 }
 
-func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, usbCopiesBucket string) (*Storage, error) {
+func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, usbCopiesBucket, publicEndpoint string) (*Storage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -38,6 +40,7 @@ func New(endpoint, accessKey, secretKey string, useSSL bool, screenshotsBucket, 
 		client:            client,
 		screenshotsBucket: screenshotsBucket,
 		usbCopiesBucket:   usbCopiesBucket,
+		publicEndpoint:    publicEndpoint,
 	}
 
 	ctx := context.Background()
@@ -102,12 +105,26 @@ func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string
 		return "", fmt.Errorf("object not found: %w", err)
 	}
 	
-	// MinIO will use MINIO_SERVER_URL env var for generating presigned URLs
-	// This allows presigned URLs to use the public endpoint automatically
+	// Generate presigned URL with internal endpoint
 	url, err := s.client.PresignedGetObject(ctx, bucket, objectName, 3600*time.Second, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
 	}
 	
-	return url.String(), nil
+	urlStr := url.String()
+	
+	// Replace internal endpoint with public endpoint if configured
+	if s.publicEndpoint != "" {
+		// URL format: http://minio:9000/bucket/object?params
+		// Need to replace scheme + host part while keeping path and query
+		// Parse to get path and query
+		if idx := strings.Index(urlStr, "/"+bucket); idx > 0 {
+			// Extract path with query: /bucket/object?params
+			pathWithQuery := urlStr[idx:]
+			// Combine public endpoint with path
+			urlStr = s.publicEndpoint + pathWithQuery
+		}
+	}
+	
+	return urlStr, nil
 }
