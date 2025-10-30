@@ -462,13 +462,19 @@ func (db *Database) GetAlerts(ctx context.Context, resolved *bool, severity stri
 		var ts time.Time
 		if err := rows.Scan(&a.ID, &ts, &a.ComputerName, &a.Username,
 			&a.AlertType, &a.Severity, &a.Description, &a.Details, &a.IsResolved); err != nil {
+			zapctx.Error(ctx, "Failed to scan alert row", zap.Error(err))
 			continue
 		}
 		a.Timestamp = ts.Format(time.RFC3339)
 		alerts = append(alerts, a)
 	}
 
-	return alerts, rows.Err()
+	if err := rows.Err(); err != nil {
+		zapctx.Error(ctx, "Error iterating alert rows", zap.Error(err))
+		return nil, err
+	}
+
+	return alerts, nil
 }
 
 // ResolveAlert marks alert as resolved
@@ -500,12 +506,18 @@ func (db *Database) GetUSBEventsByUsername(ctx context.Context, username string,
 		var e USBEvent
 		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username, &e.DeviceID,
 			&e.DeviceName, &e.DeviceType, &e.EventType, &e.VolumeSerial); err != nil {
+			zapctx.Error(ctx, "Failed to scan USB event row", zap.Error(err))
 			continue
 		}
 		events = append(events, e)
 	}
 
-	return events, rows.Err()
+	if err := rows.Err(); err != nil {
+		zapctx.Error(ctx, "Error iterating USB event rows", zap.Error(err))
+		return nil, err
+	}
+
+	return events, nil
 }
 
 // GetFileEventsByUsername returns file events for user in time range
@@ -528,12 +540,18 @@ func (db *Database) GetFileEventsByUsername(ctx context.Context, username string
 		var e FileCopyEvent
 		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username, &e.SourcePath,
 			&e.DestinationPath, &e.FileSize, &e.FileCount, &e.OperationType, &e.IsUSBTarget); err != nil {
+			zapctx.Error(ctx, "Failed to scan file event row", zap.Error(err))
 			continue
 		}
 		events = append(events, e)
 	}
 
-	return events, rows.Err()
+	if err := rows.Err(); err != nil {
+		zapctx.Error(ctx, "Error iterating file event rows", zap.Error(err))
+		return nil, err
+	}
+
+	return events, nil
 }
 
 // GetScreenshotsByUsername returns screenshots for user in time range
@@ -556,12 +574,18 @@ func (db *Database) GetScreenshotsByUsername(ctx context.Context, username strin
 		var s ScreenshotMetadata
 		if err := rows.Scan(&s.Timestamp, &s.ComputerName, &s.Username, &s.ScreenshotID,
 			&s.MinIOPath, &s.FileSize, &s.WindowTitle, &s.ProcessName); err != nil {
+			zapctx.Error(ctx, "Failed to scan screenshot row", zap.Error(err))
 			continue
 		}
 		screenshots = append(screenshots, s)
 	}
 
-	return screenshots, rows.Err()
+	if err := rows.Err(); err != nil {
+		zapctx.Error(ctx, "Error iterating screenshot rows", zap.Error(err))
+		return nil, err
+	}
+
+	return screenshots, nil
 }
 
 // GetKeyboardEventsByUsername returns keyboard events for user in time range
@@ -583,12 +607,18 @@ func (db *Database) GetKeyboardEventsByUsername(ctx context.Context, username st
 		var e KeyboardEvent
 		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username,
 			&e.WindowTitle, &e.ProcessName, &e.TextContent); err != nil {
+			zapctx.Error(ctx, "Failed to scan keyboard event row", zap.Error(err))
 			continue
 		}
 		events = append(events, e)
 	}
 
-	return events, rows.Err()
+	if err := rows.Err(); err != nil {
+		zapctx.Error(ctx, "Error iterating keyboard event rows", zap.Error(err))
+		return nil, err
+	}
+
+	return events, nil
 }
 
 // GetDailyReport generates a complete daily report for an employee
