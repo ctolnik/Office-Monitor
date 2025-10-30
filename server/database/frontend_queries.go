@@ -349,10 +349,14 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 
 // GetApplicationUsage returns application usage statistics
 func (db *Database) GetApplicationUsage(ctx context.Context, username string, start, end time.Time) ([]ApplicationUsage, error) {
+	// Format timestamps as strings in local timezone for ClickHouse
+	startStr := start.Format("2006-01-02 15:04:05")
+	endStr := end.Format("2006-01-02 15:04:05")
+	
 	zapctx.Debug(ctx, "GetApplicationUsage called",
 		zap.String("username", username),
-		zap.Time("start", start),
-		zap.Time("end", end))
+		zap.String("start", startStr),
+		zap.String("end", endStr))
 	
 	query := `
 		SELECT 
@@ -361,12 +365,14 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 			sum(duration) as total_duration,
 			count(*) as count
 		FROM monitoring.activity_events
-		WHERE username = ? AND timestamp >= ? AND timestamp < ?
+		WHERE username = ? 
+		  AND timestamp >= toDateTime(?) 
+		  AND timestamp < toDateTime(?)
 		GROUP BY process_name, window_title
 		ORDER BY total_duration DESC
 		LIMIT 50`
 
-	rows, err := db.conn.Query(ctx, query, username, start, end)
+	rows, err := db.conn.Query(ctx, query, username, startStr, endStr)
 	if err != nil {
 		return nil, err
 	}
