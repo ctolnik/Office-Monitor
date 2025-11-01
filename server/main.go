@@ -25,6 +25,7 @@ var (
 	storageClient *storage.Storage // Alias for handlers
 	cfg           *config.Config
 	appLocation   *time.Location // Application timezone from config
+	dashCache     *DashboardCache  // Cache for dashboard statistics
 )
 
 const (
@@ -92,6 +93,10 @@ func main() {
 		zap.String("screenshots_bucket", cfg.Storage.Buckets.Screenshots),
 		zap.String("usb_bucket", cfg.Storage.Buckets.USBCopies),
 	)
+
+	// Initialize dashboard cache with 5 minute TTL
+	dashCache = NewDashboardCache(5 * time.Minute)
+	logger.Info("Dashboard cache initialized", zap.Duration("ttl", 5*time.Minute))
 
 	router := initGin(cfg, logger)
 
@@ -183,6 +188,20 @@ func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
 		api.GET("/alerts", getAlertsHandler)
 		api.GET("/alerts/unresolved", getUnresolvedAlertsHandler)
 		api.PUT("/alerts/:id/resolve", resolveAlertHandler)
+
+		// Frontend API - Application Categories Management
+		api.GET("/categories", getAppCategoriesHandler)
+		api.POST("/categories", createAppCategoryHandler)
+		api.PUT("/categories/:id", updateAppCategoryHandler)
+		api.DELETE("/categories/:id", deleteAppCategoryHandler)
+		api.POST("/categories/bulk-update", bulkUpdateAppCategoriesHandler)
+		api.GET("/categories/export", exportAppCategoriesHandler)
+		api.POST("/categories/import", importAppCategoriesHandler)
+
+		// Frontend API - System Settings
+		api.GET("/settings/general", getGeneralSettingsHandler)
+		api.PUT("/settings/general", updateGeneralSettingsHandler)
+		api.POST("/settings/upload-logo", uploadLogoHandler)
 
 		// Legacy endpoints (keep for backward compatibility)
 		api.GET("/activity/recent", getRecentActivityHandler)

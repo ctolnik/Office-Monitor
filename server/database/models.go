@@ -11,6 +11,7 @@ type ActivityEvent struct {
 	ProcessPath  string    `json:"process_path"`
 	Duration     uint32    `json:"duration"`
 	IdleTime     uint32    `json:"idle_time"`
+	Category     string    `json:"category,omitempty"` // Computed field, not stored in DB
 }
 
 type KeyboardEvent struct {
@@ -20,6 +21,7 @@ type KeyboardEvent struct {
 	WindowTitle  string    `json:"window_title"`
 	ProcessName  string    `json:"process_name"`
 	TextContent  string    `json:"text_content"`
+	ContextInfo  string    `json:"context_info,omitempty" db:"context_info"` // Added field
 }
 
 type FileCopyEvent struct {
@@ -190,4 +192,41 @@ type AlertFull struct {
 	IsResolved  bool    `json:"is_resolved"`
 	ResolvedAt  *string `json:"resolved_at"`
 	ResolvedBy  *string `json:"resolved_by"`
+}
+
+// ApplicationCategory represents application category for productivity calculation
+type ApplicationCategory struct {
+	ID             string    `json:"id" db:"id"`
+	ProcessName    string    `json:"process_name" db:"process_name" binding:"required"`
+	ProcessPattern string    `json:"process_pattern" db:"process_pattern"`
+	Category       string    `json:"category" db:"category" binding:"required,oneof=productive unproductive neutral communication system"`
+	CreatedAt      time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at" db:"updated_at"`
+	CreatedBy      string    `json:"created_by" db:"created_by"`
+	UpdatedBy      string    `json:"updated_by" db:"updated_by"`
+	IsActive       bool      `json:"is_active" db:"is_active"`
+}
+
+// SystemSetting represents system configuration settings
+type SystemSetting struct {
+	Key         string    `json:"key" db:"key"`
+	Value       string    `json:"value" db:"value"`
+	Type        string    `json:"type" db:"type"`
+	Description string    `json:"description" db:"description"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedBy   string    `json:"updated_by" db:"updated_by"`
+}
+
+// ImportResult represents the result of bulk import operation
+type ImportResult struct {
+	Imported int                 `json:"imported"`
+	Skipped  int                 `json:"skipped"`
+	Errors   []ImportError       `json:"errors,omitempty"`
+}
+
+// ImportError represents an error during import
+type ImportError struct {
+	Line        int    `json:"line"`
+	ProcessName string `json:"process_name"`
+	Error       string `json:"error"`
 }

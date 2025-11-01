@@ -159,7 +159,8 @@ func deleteEmployeeHandler(c *gin.Context) {
 func getDashboardStatsHandler(c *gin.Context) {
 	ctx := c.Request.Context()
 	
-	stats, err := db.GetDashboardStats(ctx)
+	// Use cache to get stats
+	stats, err := dashCache.Get(ctx, db)
 	if err != nil {
 		zapctx.Error(ctx, "Failed to get dashboard stats", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get statistics"})

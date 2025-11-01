@@ -342,8 +342,34 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 		stats.TodayFileEvents = 0
 	}
 
-	// Average productivity (placeholder - would need productivity calculation logic)
-	stats.AvgProductivity = 75.0
+	// Average productivity calculation
+	// Get all active employees from last 7 days
+	usernames := make([]string, 0)
+	userQuery := `SELECT DISTINCT username FROM monitoring.activity_events WHERE timestamp > ?`
+	userRows, err := db.conn.Query(ctx, userQuery, weekAgo)
+	if err == nil {
+		defer userRows.Close()
+		for userRows.Next() {
+			var username string
+			if err := userRows.Scan(&username); err == nil {
+				usernames = append(usernames, username)
+			}
+		}
+	}
+
+	// Calculate average productivity across all users
+	if len(usernames) > 0 {
+		totalProductivity := 0.0
+		for _, username := range usernames {
+			prod, err := db.CalculateProductivity(ctx, username, weekAgo, now)
+			if err == nil {
+				totalProductivity += prod
+			}
+		}
+		stats.AvgProductivity = totalProductivity / float64(len(usernames))
+	} else {
+		stats.AvgProductivity = 0.0
+	}
 
 	return stats, nil
 }
@@ -706,6 +732,14 @@ func (db *Database) GetActivityEventsByUsername(ctx context.Context, username st
 	if err := rows.Err(); err != nil {
 		zapctx.Error(ctx, "Error iterating activity event rows", zap.Error(err))
 		return nil, err
+	}
+
+	// Enrich events with application categories
+	for i := range events {
+		category, err := db.MatchProcessToCategory(ctx, events[i].ProcessName, events[i].WindowTitle)
+		if err == nil {
+			events[i].Category = category
+		}
 	}
 
 	return events, nil

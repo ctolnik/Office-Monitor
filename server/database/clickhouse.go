@@ -31,6 +31,11 @@ func New(host string, port int, database, username, password, timezone string) (
 			"session_timezone":   timezone,
 		},
 		DialTimeout: 10 * time.Second,
+		// Connection pool settings
+		MaxOpenConns:    10,              // Maximum number of open connections to the database
+		MaxIdleConns:    5,               // Maximum number of idle connections
+		ConnMaxLifetime: 1 * time.Hour,   // Maximum lifetime of a connection
+		ConnOpenStrategy: clickhouse.ConnOpenInOrder, // Open connections in order
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to ClickHouse: %w", err)
@@ -105,12 +110,17 @@ func (db *Database) InsertScreenshotMetadata(ctx context.Context, meta Screensho
 }
 
 func (db *Database) InsertKeyboardEvent(ctx context.Context, event KeyboardEvent) error {
+	// Automatically detect context if not already set
+	if event.ContextInfo == "" {
+		event.ContextInfo = DetectContext(event.ProcessName, event.WindowTitle, event.TextContent)
+	}
+
 	query := `INSERT INTO monitoring.keyboard_events 
-                (timestamp, computer_name, username, window_title, process_name, text_content)
-                VALUES (?, ?, ?, ?, ?, ?)`
+                (timestamp, computer_name, username, window_title, process_name, text_content, context_info)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`
 	return db.conn.Exec(ctx, query,
 		event.Timestamp, event.ComputerName, event.Username,
-		event.WindowTitle, event.ProcessName, event.TextContent)
+		event.WindowTitle, event.ProcessName, event.TextContent, event.ContextInfo)
 }
 
 func (db *Database) GetKeyboardEvents(ctx context.Context, computerName string, from, to time.Time) ([]KeyboardEvent, error) {
