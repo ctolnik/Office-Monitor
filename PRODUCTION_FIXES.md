@@ -17,71 +17,31 @@
 
 ### Решение:
 
-**Вариант А: Через Docker (если ClickHouse в контейнере)**
+✅ **Таблица УЖЕ ЕСТЬ в файле миграций `clickhouse/init.sql`!**
+
+**Вариант А: Применить готовые миграции (РЕКОМЕНДУЕТСЯ)**
 
 ```bash
-# 1. Подключиться к production серверу (monitor.net.gslaudit.ru)
+# 1. Подключиться к production серверу
 ssh user@monitor.net.gslaudit.ru
 
-# 2. Зайти в контейнер ClickHouse
-docker exec -it clickhouse clickhouse-client
+# 2. Скопировать init.sql на production (если ещё нет)
+scp clickhouse/init.sql user@monitor.net.gslaudit.ru:/opt/monitoring/clickhouse/
 
-# 3. Выполнить SQL для создания таблицы
-CREATE TABLE IF NOT EXISTS monitoring.activity_segments (
-    timestamp_start DateTime64(3),
-    timestamp_end DateTime64(3),
-    duration_sec UInt32,
-    state Enum8('active' = 1, 'idle' = 2, 'offline' = 3),
-    computer_name String,
-    username String,
-    process_name String,
-    window_title String,
-    session_id String,
-    event_date Date DEFAULT toDate(timestamp_start)
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(event_date)
-ORDER BY (computer_name, username, timestamp_start)
-TTL event_date + INTERVAL 180 DAY;
+# 3. Применить миграции через Docker
+cd /opt/monitoring
+docker exec -i clickhouse clickhouse-client --database=monitoring < clickhouse/init.sql
 
-# 4. Создать materialized view для daily summary
-CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring.daily_activity_summary
-ENGINE = SummingMergeTree()
-PARTITION BY toYYYYMM(event_date)
-ORDER BY (computer_name, username, event_date, state)
-AS SELECT
-    computer_name,
-    username,
-    toDate(timestamp_start) as event_date,
-    state,
-    count() as segment_count,
-    sum(duration_sec) as total_seconds
-FROM monitoring.activity_segments
-GROUP BY computer_name, username, event_date, state;
-
-# 5. Создать materialized view для program usage
-CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring.program_usage_daily
-ENGINE = SummingMergeTree()
-PARTITION BY toYYYYMM(event_date)
-ORDER BY (computer_name, username, event_date, process_name)
-AS SELECT
-    computer_name,
-    username,
-    toDate(timestamp_start) as event_date,
-    process_name,
-    state,
-    count() as segment_count,
-    sum(duration_sec) as total_seconds
-FROM monitoring.activity_segments
-WHERE state = 'active'
-GROUP BY computer_name, username, event_date, process_name, state;
-
-# 6. Добавить индекс для быстрого поиска
-ALTER TABLE monitoring.activity_segments 
-ADD INDEX idx_username username TYPE bloom_filter GRANULARITY 1;
-
-# 7. Выйти
-EXIT;
+# Готово! ✅
 ```
+
+**Что создаст:**
+- ✅ Таблица `monitoring.activity_segments`
+- ✅ Materialized view `monitoring.daily_activity_summary`
+- ✅ Materialized view `monitoring.program_usage_daily`
+- ✅ Индексы для быстрого поиска
+
+**Примечание:** `CREATE TABLE IF NOT EXISTS` безопасен - не затрёт существующие таблицы!
 
 **Вариант Б: Через SQL файл**
 
