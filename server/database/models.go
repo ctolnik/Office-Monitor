@@ -124,3 +124,58 @@ type AgentConfig struct {
         LastSeen                     time.Time `json:"last_seen"`
         AgentVersion                 string    `json:"agent_version"`
 }
+
+type Agent struct {
+        ComputerName string       `json:"computer_name"`
+        Username     string       `json:"username"`
+        LastSeen     string       `json:"last_seen"`
+        Status       string       `json:"status"`
+        IPAddress    string       `json:"ip_address"`
+        OSVersion    string       `json:"os_version"`
+        AgentVersion string       `json:"agent_version"`
+        Config       ConfigUpdate `json:"config"`
+}
+
+type ConfigUpdate struct {
+        ScreenshotInterval int  `json:"screenshot_interval"`
+        ActivityTracking   bool `json:"activity_tracking"`
+        KeyloggerEnabled   bool `json:"keylogger_enabled"`
+        USBMonitoring      bool `json:"usb_monitoring"`
+        FileMonitoring     bool `json:"file_monitoring"`
+        DLPEnabled         bool `json:"dlp_enabled"`
+}
+
+type EmployeeFull struct {
+        ComputerName       string    `json:"computer_name"`
+        Username           string    `json:"username"`
+        LastSeen           time.Time `json:"last_seen"`
+        Status             string    `json:"status"`
+        ActiveTime         uint64    `json:"active_time"`
+        IdleTime           uint64    `json:"idle_time"`
+        ProductivityScore  float64   `json:"productivity_score"`
+        TopApplications    []string  `json:"top_applications"`
+        RecentScreenshots  []string  `json:"recent_screenshots"`
+}
+
+type ApplicationCategory struct {
+        ID             string    `json:"id"`
+        ProcessName    string    `json:"process_name"`
+        ProcessPattern string    `json:"process_pattern"`
+        Category       string    `json:"category"`
+        CreatedAt      time.Time `json:"created_at"`
+        UpdatedAt      time.Time `json:"updated_at"`
+        CreatedBy      string    `json:"created_by"`
+        UpdatedBy      string    `json:"updated_by"`
+        IsActive       bool      `json:"is_active"`
+}
+
+type KeyboardPeriod struct {
+        Start           time.Time `json:"start"`
+        End             time.Time `json:"end"`
+        ComputerName    string    `json:"computer_name"`
+        Username        string    `json:"username"`
+        ProcessName     string    `json:"process_name"`
+        WindowTitle     string    `json:"window_title"`
+        TextContent     string    `json:"text_content"`
+        CharacterCount  int       `json:"character_count"`
+}
