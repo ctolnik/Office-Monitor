@@ -30,7 +30,7 @@ services:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: monitoring-minio
     ports:
-      - "9100:9000"  # API
+      - "9002:9000"  # API
       - "9101:9001"  # Console
     volumes:
       - minio_data:/data
@@ -38,7 +38,7 @@ services:
       TZ: Europe/Moscow
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change_me_in_production}
-      MINIO_SERVER_URL: ${MINIO_PUBLIC_URL:-http://172.16.0.6:9100}
+      MINIO_SERVER_URL: ${MINIO_PUBLIC_URL:-http://172.16.0.6:9002}
     command: server /data --console-address ":9001"
     networks:
       - monitoring-network
