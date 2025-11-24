@@ -146,15 +146,24 @@ type ConfigUpdate struct {
 }
 
 type EmployeeFull struct {
-        ComputerName       string    `json:"computer_name"`
-        Username           string    `json:"username"`
+        ID                 string   `json:"id"`
+        ComputerName       string   `json:"computer_name"`
+        Username           string   `json:"username"`
+        FullName           string   `json:"full_name"`
+        Email              string   `json:"email"`
+        Department         string   `json:"department"`
+        Position           string   `json:"position"`
         LastSeen           time.Time `json:"last_seen"`
-        Status             string    `json:"status"`
-        ActiveTime         uint64    `json:"active_time"`
-        IdleTime           uint64    `json:"idle_time"`
-        ProductivityScore  float64   `json:"productivity_score"`
-        TopApplications    []string  `json:"top_applications"`
-        RecentScreenshots  []string  `json:"recent_screenshots"`
+        Status             string   `json:"status"`
+        ActiveTime         uint64   `json:"active_time"`
+        IdleTime           uint64   `json:"idle_time"`
+        ProductivityScore  float64  `json:"productivity_score"`
+        TopApplications    []string `json:"top_applications"`
+        RecentScreenshots  []string `json:"recent_screenshots"`
+        ConsentGiven       bool     `json:"consent_given"`
+        ConsentDate        *string  `json:"consent_date"`
+        IsActive           bool     `json:"is_active"`
+        CreatedAt          string   `json:"created_at"`
 }
 
 type ApplicationCategory struct {
