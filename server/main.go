@@ -139,6 +139,9 @@ func main() {
                 api.GET("/usb/:username", getUSBEventsHandler2)
                 api.GET("/files/:username", getFileEventsHandler2)
                 api.GET("/screenshots/:username", getScreenshotsHandler)
+                
+                // Backward compatibility alias for frontend (screenshot → screenshots/file)
+                api.GET("/screenshot/:id", getScreenshotHandler)
 
                 api.GET("/alerts", getAlertsHandler)
                 api.PUT("/alerts/:id/resolve", resolveAlertHandler)
