@@ -106,6 +106,25 @@ func main() {
                 api.GET("/dashboard/active-now", getActiveNowHandler)
                 api.GET("/reports/daily/:username", getDailyReportHandler)
                 api.GET("/alerts/unresolved", getUnresolvedAlertsHandler)
+
+                api.GET("/agents", getAgentsHandler)
+                api.GET("/agents/:computer_name/config", getAgentConfigHandler)
+                api.POST("/agents/:computer_name/config", updateAgentConfigHandler)
+                api.DELETE("/agents/:computer_name", deleteAgentHandler)
+
+                api.GET("/employees/all", getAllEmployeesHandler)
+                api.POST("/employees", createEmployeeHandler)
+                api.PUT("/employees/:id", updateEmployeeHandler)
+                api.DELETE("/employees/:id", deleteEmployeeHandler)
+
+                api.GET("/activity/applications/:username", getApplicationsHandler)
+                api.GET("/keyboard/:username", getKeyboardEventsHandler2)
+                api.GET("/usb/:username", getUSBEventsHandler2)
+                api.GET("/files/:username", getFileEventsHandler2)
+                api.GET("/screenshots/:username", getScreenshotsHandler)
+
+                api.GET("/alerts", getAlertsHandler)
+                api.PUT("/alerts/:id/resolve", resolveAlertHandler)
         }
 
         addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
