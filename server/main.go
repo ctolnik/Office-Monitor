@@ -72,8 +72,8 @@ func main() {
         }
 
         router := gin.Default()
-        router.LoadHTMLGlob("../web/templates/*")
-        router.Static("/static", "../web/static")
+        router.LoadHTMLGlob("web/templates/*")
+        router.Static("/static", "web/static")
 
         router.GET("/", indexHandler)
 
