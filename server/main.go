@@ -1,6 +1,7 @@
 package main
 
 import (
+        "encoding/json"
         "fmt"
         "log"
         "net/http"
@@ -196,43 +197,86 @@ func receiveActivityHandler(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
+type GenericEvent struct {
+        Type      string          `json:"type"`
+        Timestamp time.Time       `json:"timestamp"`
+        Data      json.RawMessage `json:"data"`
+}
+
+type BatchEventsRequest struct {
+        Events []GenericEvent `json:"events"`
+}
+
 func receiveBatchEventsHandler(c *gin.Context) {
-        var events []database.ActivityEvent
-        if err := c.ShouldBindJSON(&events); err != nil {
+        var req BatchEventsRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
                 return
         }
 
-        if len(events) == 0 {
+        if len(req.Events) == 0 {
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Empty batch"})
                 return
         }
 
-        if len(events) > 10000 {
+        if len(req.Events) > 10000 {
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Batch too large (max 10000 events)"})
                 return
         }
 
         now := time.Now()
-        validEvents := make([]database.ActivityEvent, 0, len(events))
-        for i := range events {
-                if events[i].Timestamp.IsZero() {
-                        events[i].Timestamp = now
-                }
-                
-                if events[i].Timestamp.After(now.Add(time.Hour)) {
+        validEvents := make([]database.ActivityEvent, 0, len(req.Events))
+        
+        for _, event := range req.Events {
+                if event.Type != "activity" {
                         continue
                 }
                 
-                if events[i].Duration > 86400 {
+                var activityData struct {
+                        ComputerName string `json:"computer_name"`
+                        Username     string `json:"username"`
+                        WindowTitle  string `json:"window_title"`
+                        ProcessName  string `json:"process_name"`
+                        ProcessPath  string `json:"process_path"`
+                        Duration     uint32 `json:"duration"`
+                        IdleTime     uint32 `json:"idle_time"`
+                        Category     string `json:"category"`
+                }
+                
+                if err := json.Unmarshal(event.Data, &activityData); err != nil {
+                        log.Printf("Failed to unmarshal activity event data: %v", err)
                         continue
                 }
                 
-                if events[i].ComputerName == "" || events[i].Username == "" {
+                activityEvent := database.ActivityEvent{
+                        Timestamp:    event.Timestamp,
+                        ComputerName: activityData.ComputerName,
+                        Username:     activityData.Username,
+                        WindowTitle:  activityData.WindowTitle,
+                        ProcessName:  activityData.ProcessName,
+                        ProcessPath:  activityData.ProcessPath,
+                        Duration:     activityData.Duration,
+                        IdleTime:     activityData.IdleTime,
+                        Category:     activityData.Category,
+                }
+                
+                if activityEvent.Timestamp.IsZero() {
+                        activityEvent.Timestamp = now
+                }
+                
+                if activityEvent.Timestamp.After(now.Add(time.Hour)) {
                         continue
                 }
                 
-                validEvents = append(validEvents, events[i])
+                if activityEvent.Duration > 86400 {
+                        continue
+                }
+                
+                if activityEvent.ComputerName == "" || activityEvent.Username == "" {
+                        continue
+                }
+                
+                validEvents = append(validEvents, activityEvent)
         }
 
         if len(validEvents) == 0 {
@@ -250,8 +294,8 @@ func receiveBatchEventsHandler(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{
                 "status":    "success",
                 "count":     len(validEvents),
-                "submitted": len(events),
-                "message":   fmt.Sprintf("Successfully saved %d of %d events", len(validEvents), len(events)),
+                "submitted": len(req.Events),
+                "message":   fmt.Sprintf("Successfully saved %d of %d events", len(validEvents), len(req.Events)),
         })
 }
 
