@@ -101,6 +101,11 @@ func main() {
                 api.POST("/process-catalog", createProcessCatalogHandler)
                 api.PUT("/process-catalog/:id", updateProcessCatalogHandler)
                 api.DELETE("/process-catalog/:id", deleteProcessCatalogHandler)
+
+                api.GET("/dashboard/stats", getDashboardStatsHandler)
+                api.GET("/dashboard/active-now", getActiveNowHandler)
+                api.GET("/reports/daily/:username", getDailyReportHandler)
+                api.GET("/alerts/unresolved", getUnresolvedAlertsHandler)
         }
 
         addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

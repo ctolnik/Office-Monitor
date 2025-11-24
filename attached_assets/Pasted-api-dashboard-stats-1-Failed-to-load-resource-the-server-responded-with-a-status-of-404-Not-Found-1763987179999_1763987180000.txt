@@ -1,0 +1,246 @@
+api/dashboard/stats:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+index-1pduGYX8.js:327 [API Error] GET /api/dashboard/stats - Status: 404 Object
+(anonymous) @ index-1pduGYX8.js:327
+api/dashboard/active-now:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+index-1pduGYX8.js:327 [API Error] GET /api/dashboard/active-now - Status: 404 Object
+(anonymous) @ index-1pduGYX8.js:327
+api/dashboard/stats:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+index-1pduGYX8.js:327 [API Error] GET /api/dashboard/stats - Status: 404 Object
+(anonymous) @ index-1pduGYX8.js:327
+api/dashboard/active-now:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+index-1pduGYX8.js:327 [API Error] GET /api/dashboard/active-now - Status: 404 Object
+(anonymous) @ index-1pduGYX8.js:327
+api/reports/daily/a-kiv?date=2025-11-24:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+index-1pduGYX8.js:327 [API Error] GET /api/reports/daily/a-kiv - Status: 404 Object
+(anonymous) @ index-1pduGYX8.js:327
+api/reports/daily/a-kiv?date=2025-11-24:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+index-1pduGYX8.js:327 [API Error] GET /api/reports/daily/a-kiv - Status: 404 Object
+(anonymous) @ index-1pduGYX8.js:327
+index-1pduGYX8.js:324  GET http://monitor.net.gslaudit.ru/api/alerts/unresolved 404 (Not Found)
+(anonymous) @ index-1pduGYX8.js:324
+xhr @ index-1pduGYX8.js:324
+tR @ index-1pduGYX8.js:326
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+index-1pduGYX8.js:327 [API Error] GET /api/alerts/unresolved - Status: 404 {message: 'Request failed with status code 404', response: '404 page not found', config: {…}}
+(anonymous) @ index-1pduGYX8.js:327
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+index-1pduGYX8.js:324  GET http://monitor.net.gslaudit.ru/api/alerts/unresolved 404 (Not Found)
+(anonymous) @ index-1pduGYX8.js:324
+xhr @ index-1pduGYX8.js:324
+tR @ index-1pduGYX8.js:326
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+index-1pduGYX8.js:327 [API Error] GET /api/alerts/unresolved - Status: 404 {message: 'Request failed with status code 404', response: '404 page not found', config: {…}}
+(anonymous) @ index-1pduGYX8.js:327
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+index-1pduGYX8.js:324  GET http://monitor.net.gslaudit.ru/api/alerts/unresolved 404 (Not Found)
+(anonymous) @ index-1pduGYX8.js:324
+xhr @ index-1pduGYX8.js:324
+tR @ index-1pduGYX8.js:326
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+setInterval
+$F @ index-1pduGYX8.js:251
+KF @ index-1pduGYX8.js:251
+onQueryUpdate @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+batch @ index-1pduGYX8.js:251
+rc @ index-1pduGYX8.js:251
+l @ index-1pduGYX8.js:251
+d @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+index-1pduGYX8.js:327 [API Error] GET /api/alerts/unresolved - Status: 404 {message: 'Request failed with status code 404', response: '404 page not found', config: {…}}
+(anonymous) @ index-1pduGYX8.js:327
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+setInterval
+$F @ index-1pduGYX8.js:251
+KF @ index-1pduGYX8.js:251
+onQueryUpdate @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+batch @ index-1pduGYX8.js:251
+rc @ index-1pduGYX8.js:251
+l @ index-1pduGYX8.js:251
+d @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+index-1pduGYX8.js:324  GET http://monitor.net.gslaudit.ru/api/alerts/unresolved 404 (Not Found)
+(anonymous) @ index-1pduGYX8.js:324
+xhr @ index-1pduGYX8.js:324
+tR @ index-1pduGYX8.js:326
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+setInterval
+$F @ index-1pduGYX8.js:251
+KF @ index-1pduGYX8.js:251
+onQueryUpdate @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+batch @ index-1pduGYX8.js:251
+rc @ index-1pduGYX8.js:251
+l @ index-1pduGYX8.js:251
+d @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+index-1pduGYX8.js:327 [API Error] GET /api/alerts/unresolved - Status: 404 {message: 'Request failed with status code 404', response: '404 page not found', config: {…}}
+(anonymous) @ index-1pduGYX8.js:327
+Promise.then
+_request @ index-1pduGYX8.js:327
+request @ index-1pduGYX8.js:326
+$d.<computed> @ index-1pduGYX8.js:327
+(anonymous) @ index-1pduGYX8.js:322
+getUnresolved @ index-1pduGYX8.js:327
+a @ index-1pduGYX8.js:251
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+setInterval
+$F @ index-1pduGYX8.js:251
+KF @ index-1pduGYX8.js:251
+onQueryUpdate @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+batch @ index-1pduGYX8.js:251
+rc @ index-1pduGYX8.js:251
+l @ index-1pduGYX8.js:251
+d @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
+Promise.then
+(anonymous) @ index-1pduGYX8.js:251
+Promise.catch
+p @ index-1pduGYX8.js:251
+start @ index-1pduGYX8.js:251
+fetch @ index-1pduGYX8.js:251
+Cv @ index-1pduGYX8.js:251
+(anonymous) @ index-1pduGYX8.js:251
