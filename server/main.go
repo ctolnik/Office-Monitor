@@ -1,646 +1,447 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"time"
+        "context"
+        "fmt"
+        "log"
+        "net/http"
+        "time"
 
-	"github.com/ctolnik/Office-Monitor/server/config"
-	"github.com/ctolnik/Office-Monitor/server/database"
-	"github.com/ctolnik/Office-Monitor/server/storage"
-	"github.com/ctolnik/Office-Monitor/zapctx"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+        "employee-monitor/server/config"
+        "employee-monitor/server/database"
+        "employee-monitor/server/storage"
 
-	"github.com/gin-contrib/cors"
-	ginzap "github.com/gin-contrib/zap"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+        "github.com/gin-gonic/gin"
 )
 
 var (
-	db            *database.Database
-	st            *storage.Storage
-	storageClient *storage.Storage // Alias for handlers
-	cfg           *config.Config
-	appLocation   *time.Location // Application timezone from config
-	dashCache     *DashboardCache  // Cache for dashboard statistics
-)
-
-const (
-	template = "./web/templates/*"
-	static   = "./web/static"
+        db  *database.Database
+        st  *storage.Storage
+        cfg *config.Config
 )
 
 func main() {
-	var err error
+        var err error
 
-	// Инициализация логгера на основе конфига
-	logger := initLogger("dev") // TODO: брать из config после загрузки
-	defer logger.Sync()
+        cfg, err = config.Load("config.yaml")
+        if err != nil {
+                log.Fatalf("Failed to load config: %v", err)
+        }
 
-	cfg, err = config.Load("config.yaml")
-	if err != nil {
-		logger.Fatal("Failed to load config", zap.Error(err))
-	}
-	fmt.Println(cfg)
-	
-	// Load timezone from config
-	if cfg.Database.Timezone != "" {
-		appLocation, err = time.LoadLocation(cfg.Database.Timezone)
-		if err != nil {
-			logger.Warn("Failed to load timezone, using UTC", 
-				zap.String("timezone", cfg.Database.Timezone),
-				zap.Error(err))
-			appLocation = time.UTC
-		}
-	} else {
-		appLocation = time.UTC
-	}
-	logger.Info("Timezone loaded", zap.String("location", appLocation.String()))
-	
-	db, err = database.New(
-		cfg.Database.Host,
-		cfg.Database.Port,
-		cfg.Database.Database,
-		cfg.Database.Username,
-		cfg.Database.Password,
-		cfg.Database.Timezone,
-	)
-	if err != nil {
-		logger.Fatal("Failed to connect to database", zap.Error(err))
-	}
-	defer db.Close()
+        db, err = database.New(
+                cfg.Database.ClickHouse.Host,
+                cfg.Database.ClickHouse.Port,
+                cfg.Database.ClickHouse.Database,
+                cfg.Database.ClickHouse.Username,
+                cfg.Database.ClickHouse.Password,
+        )
+        if err != nil {
+                log.Fatalf("Failed to connect to database: %v", err)
+        }
+        defer db.Close()
 
-	// Initialize MinIO storage for screenshots and USB files
-	st, err = storage.New(
-		cfg.Storage.Endpoint,
-		cfg.Storage.AccessKey,
-		cfg.Storage.SecretKey,
-		cfg.Storage.UseSSL,
-		cfg.Storage.Buckets.Screenshots,
-		cfg.Storage.Buckets.USBCopies,
-		cfg.Storage.PublicEndpoint,
-	)
-	if err != nil {
-		logger.Fatal("Failed to connect to MinIO storage", zap.Error(err))
-	}
-	storageClient = st // Set alias for handlers
-	logger.Info("Storage initialized",
-		zap.String("endpoint", cfg.Storage.Endpoint),
-		zap.String("public_endpoint", cfg.Storage.PublicEndpoint),
-		zap.String("screenshots_bucket", cfg.Storage.Buckets.Screenshots),
-		zap.String("usb_bucket", cfg.Storage.Buckets.USBCopies),
-	)
+        st, err = storage.New(
+                cfg.Storage.MinIO.Endpoint,
+                cfg.Storage.MinIO.AccessKey,
+                cfg.Storage.MinIO.SecretKey,
+                cfg.Storage.MinIO.UseSSL,
+        )
+        if err != nil {
+                log.Fatalf("Failed to connect to MinIO: %v", err)
+        }
 
-	// Initialize dashboard cache with 5 minute TTL
-	dashCache = NewDashboardCache(5 * time.Minute)
-	logger.Info("Dashboard cache initialized", zap.Duration("ttl", 5*time.Minute))
+        if cfg.Server.Mode == "release" {
+                gin.SetMode(gin.ReleaseMode)
+        }
 
-	router := initGin(cfg, logger)
+        router := gin.Default()
+        router.LoadHTMLGlob("../web/templates/*")
+        router.Static("/static", "../web/static")
 
-	sock := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-	logger.Info("Server starting", zap.String("Socket", sock))
-	if err := router.Run(sock); err != nil {
-		logger.Fatal("Failed to start server", zap.Error(err))
-	}
-}
+        router.GET("/", indexHandler)
 
-// initLogger создает логгер на основе окружения
-func initLogger(mode string) *zap.Logger {
-	var logger *zap.Logger
-	var err error
+        api := router.Group("/api")
+        {
+                api.POST("/activity", receiveActivityHandler)
+                api.GET("/employees", getEmployeesHandler)
+                api.GET("/activity/recent", getRecentActivityHandler)
 
-	if mode == "prod" || mode == "release" {
-		// Production логгер: JSON формат, без stacktrace для Info/Warn
-		config := zap.NewProductionConfig()
-		config.EncoderConfig.TimeKey = "timestamp"
-		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-		logger, err = config.Build()
-	} else {
-		// Development логгер: удобный для чтения формат
-		config := zap.NewDevelopmentConfig()
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		logger, err = config.Build()
-	}
+                api.POST("/activity/segment", receiveActivitySegmentHandler)
+                api.GET("/activity/summary", getDailyActivitySummaryHandler)
 
-	if err != nil {
-		panic(fmt.Sprintf("Failed to initialize logger: %v", err))
-	}
+                api.POST("/usb/event", receiveUSBEventHandler)
+                api.GET("/usb/events", getUSBEventsHandler)
 
-	return logger
-}
+                api.POST("/file/event", receiveFileEventHandler)
+                api.GET("/file/events", getFileEventsHandler)
 
-func initGin(c *config.Config, logger *zap.Logger) *gin.Engine {
-	if c.Server.Mode == "prod" {
-		logger.Debug("Server mode is prode")
-		gin.SetMode(gin.ReleaseMode)
-	}
-	router := newGin(logger)
-	router.LoadHTMLGlob(template)
-	router.Static("/static", static)
+                api.POST("/screenshot", receiveScreenshotHandler)
 
-	router.GET("/", indexHandler)
-	router.GET("/health", healthHandler)
+                api.POST("/keyboard/event", receiveKeyboardEventHandler)
+                api.GET("/keyboard/events", getKeyboardEventsHandler)
 
-	api := router.Group("/api")
-	{
-		// Agent data collection endpoints (from agents)
-		api.POST("/activity", receiveActivityHandler)
-		api.POST("/events/batch", receiveBatchEventsHandler)
-		api.POST("/usb/event", receiveUSBEventHandler)
-		api.POST("/file/event", receiveFileEventHandler)
-		api.POST("/screenshot", receiveScreenshotHandler)
-		api.POST("/keyboard/event", receiveKeyboardEventHandler)
+                api.GET("/process-catalog", getProcessCatalogHandler)
+                api.POST("/process-catalog", createProcessCatalogHandler)
+                api.PUT("/process-catalog/:id", updateProcessCatalogHandler)
+                api.DELETE("/process-catalog/:id", deleteProcessCatalogHandler)
+        }
 
-		// Frontend API - Agents Management
-		api.GET("/agents", getAgentsHandler)
-		api.GET("/agents/:computer_name/config", getAgentConfigHandler)
-		api.POST("/agents/:computer_name/config", updateAgentConfigHandler)
-		api.DELETE("/agents/:computer_name", deleteAgentHandler)
-
-		// Frontend API - Users (from activity)
-		api.GET("/users", getAllUsersHandler)
-
-		// Frontend API - Employees Management
-		api.GET("/employees", getAllEmployeesHandler)
-		api.POST("/employees", createEmployeeHandler)
-		api.PUT("/employees/:id", updateEmployeeHandler)
-		api.DELETE("/employees/:id", deleteEmployeeHandler)
-
-		// Frontend API - Dashboard
-		api.GET("/dashboard/stats", getDashboardStatsHandler)
-		api.GET("/dashboard/active-now", getActiveNowHandler)
-
-		// Frontend API - Reports
-		api.GET("/reports/daily/:username", getDailyReportHandler)
-		api.GET("/activity/applications/:username", getApplicationsHandler)
-		api.GET("/keyboard/:username", getKeyboardEventsHandler2)
-		api.GET("/usb/:username", getUSBEventsHandler2)
-		api.GET("/files/:username", getFileEventsHandler2)
-		api.GET("/screenshots/:username", getScreenshotsHandler)
-		
-		// Frontend API - Screenshot retrieval
-		api.GET("/screenshot/:id", getScreenshotHandler)
-
-		// Frontend API - Alerts
-		api.GET("/alerts", getAlertsHandler)
-		api.GET("/alerts/unresolved", getUnresolvedAlertsHandler)
-		api.PUT("/alerts/:id/resolve", resolveAlertHandler)
-
-		// Frontend API - Application Categories Management
-		api.GET("/categories", getAppCategoriesHandler)
-		api.POST("/categories", createAppCategoryHandler)
-		api.PUT("/categories/:id", updateAppCategoryHandler)
-		api.DELETE("/categories/:id", deleteAppCategoryHandler)
-		api.POST("/categories/bulk-update", bulkUpdateAppCategoriesHandler)
-		api.GET("/categories/export", exportAppCategoriesHandler)
-		api.POST("/categories/import", importAppCategoriesHandler)
-
-		// Frontend API - System Settings
-		api.GET("/settings/general", getGeneralSettingsHandler)
-		api.PUT("/settings/general", updateGeneralSettingsHandler)
-		api.POST("/settings/upload-logo", uploadLogoHandler)
-
-		// Legacy endpoints (keep for backward compatibility)
-		api.GET("/activity/recent", getRecentActivityHandler)
-		api.GET("/usb/events", getUSBEventsHandler)
-		api.GET("/file/events", getFileEventsHandler)
-		api.GET("/keyboard/events", getKeyboardEventsHandler)
-	}
-	return router
-}
-
-func newGin(logger *zap.Logger) *gin.Engine {
-	router := gin.New()
-
-	// CORS middleware
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost", "http://localhost:80", "http://localhost:5173"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-API-Key", "X-Request-ID"},
-		ExposeHeaders:    []string{"Content-Length", "X-Request-ID"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
-
-	// HTTP логирование
-	router.Use(ginzap.Ginzap(logger, time.RFC3339, true))
-	router.Use(ginzap.RecoveryWithZap(logger, true))
-
-	// Добавляем Request ID и логгер в контекст
-	router.Use(requestIDMiddleware())
-	router.Use(loggerMiddleware(logger))
-
-	return router
-}
-
-// requestIDMiddleware добавляет уникальный ID для каждого запроса
-func requestIDMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		requestID := c.GetHeader("X-Request-ID")
-		if requestID == "" {
-			requestID = uuid.New().String()
-		}
-		c.Set("request_id", requestID)
-		c.Header("X-Request-ID", requestID)
-		c.Next()
-	}
-}
-
-// loggerMiddleware добавляет логгер с request_id в контекст
-func loggerMiddleware(logger *zap.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		requestID, _ := c.Get("request_id")
-		// Создаем логгер с request_id для трейсинга
-		loggerWithReqID := logger.With(
-			zap.String("request_id", requestID.(string)),
-			zap.String("method", c.Request.Method),
-			zap.String("path", c.Request.URL.Path),
-		)
-		ctx := zapctx.WithLogger(c.Request.Context(), loggerWithReqID)
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	}
+        addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+        log.Printf("Server starting on %s", addr)
+        if err := router.Run(addr); err != nil {
+                log.Fatalf("Failed to start server: %v", err)
+        }
 }
 
 func indexHandler(c *gin.Context) {
-	c.HTML(http.StatusOK, "index.html", nil)
-}
-
-func healthHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":    "ok",
-		"timestamp": time.Now().Format(time.RFC3339),
-	})
+        c.HTML(http.StatusOK, "index.html", nil)
 }
 
 func receiveActivityHandler(c *gin.Context) {
-	ctx := c.Request.Context()
-	var event database.ActivityEvent
+        var event database.ActivityEvent
+        if err := c.ShouldBindJSON(&event); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
 
-	if err := c.ShouldBindJSON(&event); err != nil {
-		zapctx.Warn(ctx, "Invalid activity request",
-			zap.Error(err),
-			zap.String("remote_addr", c.ClientIP()),
-		)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
+        if event.Timestamp.IsZero() {
+                event.Timestamp = time.Now()
+        }
 
-	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now()
-	}
+        ctx := context.Background()
+        if err := db.InsertActivityEvent(ctx, event); err != nil {
+                log.Printf("Failed to insert activity: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+                return
+        }
 
-	zapctx.Debug(ctx, "Inserting activity event",
-		zap.String("computer_name", event.ComputerName),
-		zap.String("username", event.Username),
-		zap.String("process", event.ProcessName),
-	)
-
-	if err := db.InsertActivityEvent(ctx, event); err != nil {
-		zapctx.Error(ctx, "Failed to insert activity event",
-			zap.Error(err),
-			zap.String("computer_name", event.ComputerName),
-			zap.String("username", event.Username),
-		)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
-		return
-	}
-
-	zapctx.Info(ctx, "Activity event saved successfully",
-		zap.String("computer_name", event.ComputerName),
-		zap.String("username", event.Username),
-	)
-	c.JSON(http.StatusOK, gin.H{"status": "success"})
+        c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func getEmployeesHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        ctx := context.Background()
+        employees, err := db.GetActiveEmployees(ctx)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employees"})
+                return
+        }
 
-	zapctx.Debug(ctx, "Fetching active employees")
-
-	employees, err := db.GetActiveEmployees(ctx)
-	if err != nil {
-		zapctx.Error(ctx, "Failed to fetch employees", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employees"})
-		return
-	}
-
-	zapctx.Info(ctx, "Employees fetched successfully",
-		zap.Int("count", len(employees)),
-	)
-	c.JSON(http.StatusOK, employees)
+        c.JSON(http.StatusOK, employees)
 }
 
 func getRecentActivityHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        ctx := context.Background()
+        records, err := db.GetRecentActivity(ctx, 100)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activity"})
+                return
+        }
 
-	zapctx.Debug(ctx, "Fetching recent activity")
-
-	records, err := db.GetRecentActivity(ctx, 100)
-	if err != nil {
-		zapctx.Error(ctx, "Failed to fetch recent activity", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activity"})
-		return
-	}
-
-	zapctx.Info(ctx, "Recent activity fetched successfully",
-		zap.Int("count", len(records)),
-	)
-	c.JSON(http.StatusOK, records)
+        c.JSON(http.StatusOK, records)
 }
 
 func receiveUSBEventHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        var event database.USBEvent
+        if err := c.ShouldBindJSON(&event); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
 
-	var event database.USBEvent
-	if err := c.ShouldBindJSON(&event); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
+        if event.Timestamp.IsZero() {
+                event.Timestamp = time.Now()
+        }
 
-	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now()
-	}
+        ctx := context.Background()
+        if err := db.InsertUSBEvent(ctx, event); err != nil {
+                log.Printf("Failed to insert USB event: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+                return
+        }
 
-	if err := db.InsertUSBEvent(ctx, event); err != nil {
-		zapctx.Error(ctx, "Failed to insert USB event", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success"})
+        c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func getUSBEventsHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        computerName := c.Query("computer_name")
+        if computerName == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "computer_name required"})
+                return
+        }
 
-	computerName := c.Query("computer_name")
-	if computerName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "computer_name required"})
-		zapctx.Warn(ctx, "Computer_name is empty")
-		return
-	}
+        fromStr := c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
+        toStr := c.DefaultQuery("to", time.Now().Format(time.RFC3339))
 
-	fromStr := c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
-	toStr := c.DefaultQuery("to", time.Now().Format(time.RFC3339))
+        from, _ := time.Parse(time.RFC3339, fromStr)
+        to, _ := time.Parse(time.RFC3339, toStr)
 
-	from, _ := time.Parse(time.RFC3339, fromStr)
-	to, _ := time.Parse(time.RFC3339, toStr)
+        ctx := context.Background()
+        events, err := db.GetUSBEvents(ctx, computerName, from, to)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
+                return
+        }
 
-	events, err := db.GetUSBEvents(ctx, computerName, from, to)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
-		return
-	}
-
-	c.JSON(http.StatusOK, events)
+        c.JSON(http.StatusOK, events)
 }
 
 func receiveFileEventHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        var event database.FileCopyEvent
+        if err := c.ShouldBindJSON(&event); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
 
-	var event database.FileCopyEvent
-	if err := c.ShouldBindJSON(&event); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
+        if event.Timestamp.IsZero() {
+                event.Timestamp = time.Now()
+        }
 
-	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now()
-	}
+        ctx := context.Background()
+        if err := db.InsertFileCopyEvent(ctx, event); err != nil {
+                log.Printf("Failed to insert file event: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+                return
+        }
 
-	if err := db.InsertFileCopyEvent(ctx, event); err != nil {
-		zapctx.Error(ctx, "Failed to insert file event", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success"})
+        c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func getFileEventsHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        computerName := c.Query("computer_name")
+        if computerName == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "computer_name required"})
+                return
+        }
 
-	computerName := c.Query("computer_name")
-	if computerName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "computer_name required"})
-		return
-	}
+        fromStr := c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
+        toStr := c.DefaultQuery("to", time.Now().Format(time.RFC3339))
 
-	fromStr := c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
-	toStr := c.DefaultQuery("to", time.Now().Format(time.RFC3339))
+        from, _ := time.Parse(time.RFC3339, fromStr)
+        to, _ := time.Parse(time.RFC3339, toStr)
 
-	from, _ := time.Parse(time.RFC3339, fromStr)
-	to, _ := time.Parse(time.RFC3339, toStr)
+        ctx := context.Background()
+        events, err := db.GetFileEvents(ctx, computerName, from, to)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
+                return
+        }
 
-	events, err := db.GetFileEvents(ctx, computerName, from, to)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
-		return
-	}
-
-	c.JSON(http.StatusOK, events)
+        c.JSON(http.StatusOK, events)
 }
 
 func receiveScreenshotHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        var screenshot struct {
+                Timestamp    time.Time `json:"timestamp"`
+                ComputerName string    `json:"computer_name"`
+                Username     string    `json:"username"`
+                ScreenshotID string    `json:"screenshot_id"`
+                WindowTitle  string    `json:"window_title"`
+                ProcessName  string    `json:"process_name"`
+                FileSize     int64     `json:"file_size"`
+                ImageData    []byte    `json:"image_data"`
+        }
 
-	var screenshot struct {
-		Timestamp    time.Time `json:"timestamp"`
-		ComputerName string    `json:"computer_name"`
-		Username     string    `json:"username"`
-		ScreenshotID string    `json:"screenshot_id"`
-		WindowTitle  string    `json:"window_title"`
-		ProcessName  string    `json:"process_name"`
-		FileSize     int64     `json:"file_size"`
-		ImageData    []byte    `json:"image_data"`
-	}
+        if err := c.ShouldBindJSON(&screenshot); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
 
-	if err := c.ShouldBindJSON(&screenshot); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
+        if screenshot.Timestamp.IsZero() {
+                screenshot.Timestamp = time.Now()
+        }
 
-	if screenshot.Timestamp.IsZero() {
-		screenshot.Timestamp = time.Now()
-	}
+        ctx := context.Background()
 
-	minioPath, err := st.UploadScreenshot(ctx, screenshot.ScreenshotID, screenshot.ImageData)
-	if err != nil {
-		zapctx.Error(ctx, "Failed to upload screenshot to MinIO", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save screenshot"})
-		return
-	}
+        minioPath, err := st.UploadScreenshot(ctx, screenshot.ScreenshotID, screenshot.ImageData)
+        if err != nil {
+                log.Printf("Failed to upload screenshot to MinIO: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save screenshot"})
+                return
+        }
 
-	meta := database.ScreenshotMetadata{
-		Timestamp:    screenshot.Timestamp,
-		ComputerName: screenshot.ComputerName,
-		Username:     screenshot.Username,
-		ScreenshotID: screenshot.ScreenshotID,
-		MinIOPath:    minioPath,
-		FileSize:     uint64(screenshot.FileSize),
-		WindowTitle:  screenshot.WindowTitle,
-		ProcessName:  screenshot.ProcessName,
-	}
+        meta := database.ScreenshotMetadata{
+                Timestamp:    screenshot.Timestamp,
+                ComputerName: screenshot.ComputerName,
+                Username:     screenshot.Username,
+                ScreenshotID: screenshot.ScreenshotID,
+                MinIOPath:    minioPath,
+                FileSize:     uint64(screenshot.FileSize),
+                WindowTitle:  screenshot.WindowTitle,
+                ProcessName:  screenshot.ProcessName,
+        }
 
-	if err := db.InsertScreenshotMetadata(ctx, meta); err != nil {
-		zapctx.Error(ctx, "Failed to insert screenshot metadata", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save metadata"})
-		return
-	}
+        if err := db.InsertScreenshotMetadata(ctx, meta); err != nil {
+                log.Printf("Failed to insert screenshot metadata: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save metadata"})
+                return
+        }
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "screenshot_id": screenshot.ScreenshotID})
+        c.JSON(http.StatusOK, gin.H{"status": "success", "screenshot_id": screenshot.ScreenshotID})
 }
 
 func receiveKeyboardEventHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        var event database.KeyboardEvent
+        if err := c.ShouldBindJSON(&event); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
 
-	var event database.KeyboardEvent
-	if err := c.ShouldBindJSON(&event); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
+        if event.Timestamp.IsZero() {
+                event.Timestamp = time.Now()
+        }
 
-	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now()
-	}
+        ctx := context.Background()
+        if err := db.InsertKeyboardEvent(ctx, event); err != nil {
+                log.Printf("Failed to insert keyboard event: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+                return
+        }
 
-	if err := db.InsertKeyboardEvent(ctx, event); err != nil {
-		zapctx.Error(ctx, "Failed to insert keyboard event", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success"})
+        c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func getKeyboardEventsHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+        computerName := c.Query("computer_name")
+        if computerName == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "computer_name required"})
+                return
+        }
 
-	computerName := c.Query("computer_name")
-	if computerName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "computer_name required"})
-		return
-	}
+        fromStr := c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
+        toStr := c.DefaultQuery("to", time.Now().Format(time.RFC3339))
 
-	fromStr := c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
-	toStr := c.DefaultQuery("to", time.Now().Format(time.RFC3339))
+        from, _ := time.Parse(time.RFC3339, fromStr)
+        to, _ := time.Parse(time.RFC3339, toStr)
 
-	from, _ := time.Parse(time.RFC3339, fromStr)
-	to, _ := time.Parse(time.RFC3339, toStr)
+        ctx := context.Background()
+        events, err := db.GetKeyboardEvents(ctx, computerName, from, to)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
+                return
+        }
 
-	events, err := db.GetKeyboardEvents(ctx, computerName, from, to)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
-		return
-	}
-
-	c.JSON(http.StatusOK, events)
+        c.JSON(http.StatusOK, events)
 }
 
-func receiveBatchEventsHandler(c *gin.Context) {
-	ctx := c.Request.Context()
+func receiveActivitySegmentHandler(c *gin.Context) {
+        var segment database.ActivitySegment
+        if err := c.ShouldBindJSON(&segment); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
 
-	var payload struct {
-		Events []struct {
-			Type      string          `json:"type"`
-			Timestamp time.Time       `json:"timestamp"`
-			Data      json.RawMessage `json:"data"`
-		} `json:"events"`
-	}
+        if segment.TimestampStart.IsZero() {
+                segment.TimestampStart = time.Now()
+        }
+        if segment.TimestampEnd.IsZero() {
+                segment.TimestampEnd = segment.TimestampStart
+        }
 
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		zapctx.Warn(ctx, "Invalid batch request",
-			zap.Error(err),
-			zap.String("remote_addr", c.ClientIP()),
-		)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
+        ctx := context.Background()
+        if err := db.InsertActivitySegment(ctx, segment); err != nil {
+                log.Printf("Failed to insert activity segment: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
+                return
+        }
 
-	if len(payload.Events) == 0 {
-		c.JSON(http.StatusOK, gin.H{"status": "success", "processed": 0})
-		return
-	}
+        c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
 
-	zapctx.Info(ctx, "Received batch events",
-		zap.Int("count", len(payload.Events)),
-		zap.String("remote_addr", c.ClientIP()),
-	)
+func getDailyActivitySummaryHandler(c *gin.Context) {
+        computerName := c.Query("computer_name")
+        if computerName == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "computer_name required"})
+                return
+        }
 
-	processed := 0
-	failed := 0
+        dateStr := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+        date, err := time.Parse("2006-01-02", dateStr)
+        if err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
+                return
+        }
 
-	for _, event := range payload.Events {
-		var err error
+        ctx := context.Background()
+        summary, err := db.GetDailyActivitySummary(ctx, computerName, date)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch summary"})
+                return
+        }
 
-		switch event.Type {
-		case "activity":
-			var actEvent database.ActivityEvent
-			if err = json.Unmarshal(event.Data, &actEvent); err == nil {
-				if actEvent.Timestamp.IsZero() {
-					actEvent.Timestamp = event.Timestamp
-				}
-				err = db.InsertActivityEvent(ctx, actEvent)
-			}
+        c.JSON(http.StatusOK, summary)
+}
 
-		case "usb":
-			var usbEvent database.USBEvent
-			if err = json.Unmarshal(event.Data, &usbEvent); err == nil {
-				if usbEvent.Timestamp.IsZero() {
-					usbEvent.Timestamp = event.Timestamp
-				}
-				err = db.InsertUSBEvent(ctx, usbEvent)
-			}
+func getProcessCatalogHandler(c *gin.Context) {
+        ctx := context.Background()
+        entries, err := db.GetProcessCatalog(ctx)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch catalog"})
+                return
+        }
 
-		case "file":
-			var fileEvent database.FileCopyEvent
-			if err = json.Unmarshal(event.Data, &fileEvent); err == nil {
-				if fileEvent.Timestamp.IsZero() {
-					fileEvent.Timestamp = event.Timestamp
-				}
-				err = db.InsertFileCopyEvent(ctx, fileEvent)
-			}
+        c.JSON(http.StatusOK, entries)
+}
 
-		case "keyboard":
-			var kbEvent database.KeyboardEvent
-			if err = json.Unmarshal(event.Data, &kbEvent); err == nil {
-				if kbEvent.Timestamp.IsZero() {
-					kbEvent.Timestamp = event.Timestamp
-				}
-				err = db.InsertKeyboardEvent(ctx, kbEvent)
-			}
+func createProcessCatalogHandler(c *gin.Context) {
+        var entry database.ProcessCatalogEntry
+        if err := c.ShouldBindJSON(&entry); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
 
-		default:
-			zapctx.Warn(ctx, "Unknown event type in batch",
-				zap.String("type", event.Type),
-			)
-			failed++
-			continue
-		}
+        entry.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+        entry.CreatedAt = time.Now()
+        entry.UpdatedAt = time.Now()
+        entry.IsActive = true
 
-		if err != nil {
-			zapctx.Error(ctx, "Failed to insert batch event",
-				zap.Error(err),
-				zap.String("type", event.Type),
-			)
-			failed++
-		} else {
-			processed++
-		}
-	}
+        ctx := context.Background()
+        if err := db.CreateProcessCatalogEntry(ctx, entry); err != nil {
+                log.Printf("Failed to create process catalog entry: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})
+                return
+        }
 
-	zapctx.Info(ctx, "Batch events processed",
-		zap.Int("processed", processed),
-		zap.Int("failed", failed),
-	)
+        c.JSON(http.StatusOK, entry)
+}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":    "success",
-		"processed": processed,
-		"failed":    failed,
-	})
+func updateProcessCatalogHandler(c *gin.Context) {
+        id := c.Param("id")
+        if id == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "ID required"})
+                return
+        }
+
+        var entry database.ProcessCatalogEntry
+        if err := c.ShouldBindJSON(&entry); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
+
+        entry.ID = id
+        entry.UpdatedAt = time.Now()
+
+        ctx := context.Background()
+        if err := db.UpdateProcessCatalogEntry(ctx, entry); err != nil {
+                log.Printf("Failed to update process catalog entry: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
+                return
+        }
+
+        c.JSON(http.StatusOK, entry)
+}
+
+func deleteProcessCatalogHandler(c *gin.Context) {
+        id := c.Param("id")
+        if id == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "ID required"})
+                return
+        }
+
+        ctx := context.Background()
+        if err := db.DeleteProcessCatalogEntry(ctx, id); err != nil {
+                log.Printf("Failed to delete process catalog entry: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
+                return
+        }
+
+        c.JSON(http.StatusOK, gin.H{"status": "success"})
 }

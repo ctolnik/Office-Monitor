@@ -7,9 +7,7 @@ CREATE TABLE IF NOT EXISTS monitoring.activity_events (
     username String,
     window_title String,
     process_name String,
-    process_path String,
     duration UInt32,
-    idle_time UInt32,
     event_date Date DEFAULT toDate(timestamp)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(event_date)
@@ -133,17 +131,78 @@ CREATE TABLE IF NOT EXISTS monitoring.employees (
     username String,
     full_name String,
     department String,
-    position String DEFAULT '',
     email String,
-    consent_given UInt8 DEFAULT 0,
-    consent_date Nullable(DateTime),
     is_active UInt8 DEFAULT 1,
     monitoring_enabled UInt8 DEFAULT 1,
+    consent_date DateTime,
     created_at DateTime DEFAULT now()
 ) ENGINE = ReplacingMergeTree(created_at)
 ORDER BY (computer_name, username);
+
+-- Activity segments table (tracks active/idle/offline periods)
+CREATE TABLE IF NOT EXISTS monitoring.activity_segments (
+    timestamp_start DateTime64(3),
+    timestamp_end DateTime64(3),
+    duration_sec UInt32,
+    state Enum8('active' = 1, 'idle' = 2, 'offline' = 3),
+    computer_name String,
+    username String,
+    process_name String,
+    window_title String,
+    session_id String,
+    event_date Date DEFAULT toDate(timestamp_start)
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(event_date)
+ORDER BY (computer_name, username, timestamp_start)
+TTL event_date + INTERVAL 180 DAY;
+
+-- Process catalog table (friendly names mapping)
+CREATE TABLE IF NOT EXISTS monitoring.process_catalog (
+    id UUID,
+    friendly_name String,
+    process_names Array(String),
+    window_title_patterns Array(String),
+    category Enum8('work' = 1, 'communication' = 2, 'development' = 3, 'browsing' = 4, 'other' = 5),
+    is_active UInt8 DEFAULT 1,
+    created_at DateTime DEFAULT now(),
+    updated_at DateTime DEFAULT now()
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY id;
+
+-- Materialized view for daily activity summary
+CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring.daily_activity_summary
+ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(event_date)
+ORDER BY (computer_name, username, event_date, state)
+AS SELECT
+    computer_name,
+    username,
+    toDate(timestamp_start) as event_date,
+    state,
+    count() as segment_count,
+    sum(duration_sec) as total_seconds
+FROM monitoring.activity_segments
+GROUP BY computer_name, username, event_date, state;
+
+-- Materialized view for program usage statistics with friendly names
+CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring.program_usage_daily
+ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(event_date)
+ORDER BY (computer_name, username, event_date, process_name)
+AS SELECT
+    computer_name,
+    username,
+    toDate(timestamp_start) as event_date,
+    process_name,
+    state,
+    count() as segment_count,
+    sum(duration_sec) as total_seconds
+FROM monitoring.activity_segments
+WHERE state = 'active'
+GROUP BY computer_name, username, event_date, process_name, state;
 
 -- Index for fast username search
 ALTER TABLE monitoring.activity_events ADD INDEX idx_username username TYPE bloom_filter GRANULARITY 1;
 ALTER TABLE monitoring.keyboard_events ADD INDEX idx_username username TYPE bloom_filter GRANULARITY 1;
 ALTER TABLE monitoring.file_copy_events ADD INDEX idx_username username TYPE bloom_filter GRANULARITY 1;
+ALTER TABLE monitoring.activity_segments ADD INDEX idx_username username TYPE bloom_filter GRANULARITY 1;
