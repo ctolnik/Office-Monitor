@@ -14,6 +14,7 @@ import (
         "github.com/ctolnik/Office-Monitor/agent/buffer"
         "github.com/ctolnik/Office-Monitor/agent/config"
         "github.com/ctolnik/Office-Monitor/agent/httpclient"
+        "github.com/ctolnik/Office-Monitor/agent/logger"
         "github.com/ctolnik/Office-Monitor/agent/monitoring"
 )
 
@@ -31,6 +32,16 @@ func main() {
         cfg, err := config.Load(*configPath)
         if err != nil {
                 log.Fatalf("Failed to load config: %v", err)
+        }
+
+        // Initialize file logging
+        if cfg.Logging.File != "" {
+                if err := logger.Init(cfg.Logging.File); err != nil {
+                        log.Printf("WARNING: Failed to initialize file logging: %v", err)
+                        log.Println("Continuing with console logging only")
+                } else {
+                        log.Printf("Logging to file: %s", cfg.Logging.File)
+                }
         }
 
         log.Printf("Computer: %s, User: %s", cfg.Agent.ComputerName, os.Getenv("USERNAME"))
