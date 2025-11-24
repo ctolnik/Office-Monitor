@@ -224,78 +224,147 @@ func receiveBatchEventsHandler(c *gin.Context) {
                 return
         }
 
-        now := time.Now()
-        validEvents := make([]database.ActivityEvent, 0, len(req.Events))
-        
-        for _, event := range req.Events {
-                if event.Type != "activity" {
-                        continue
-                }
-                
-                var activityData struct {
-                        ComputerName string `json:"computer_name"`
-                        Username     string `json:"username"`
-                        WindowTitle  string `json:"window_title"`
-                        ProcessName  string `json:"process_name"`
-                        ProcessPath  string `json:"process_path"`
-                        Duration     uint32 `json:"duration"`
-                        IdleTime     uint32 `json:"idle_time"`
-                        Category     string `json:"category"`
-                }
-                
-                if err := json.Unmarshal(event.Data, &activityData); err != nil {
-                        log.Printf("Failed to unmarshal activity event data: %v", err)
-                        continue
-                }
-                
-                activityEvent := database.ActivityEvent{
-                        Timestamp:    event.Timestamp,
-                        ComputerName: activityData.ComputerName,
-                        Username:     activityData.Username,
-                        WindowTitle:  activityData.WindowTitle,
-                        ProcessName:  activityData.ProcessName,
-                        ProcessPath:  activityData.ProcessPath,
-                        Duration:     activityData.Duration,
-                        IdleTime:     activityData.IdleTime,
-                        Category:     activityData.Category,
-                }
-                
-                if activityEvent.Timestamp.IsZero() {
-                        activityEvent.Timestamp = now
-                }
-                
-                if activityEvent.Timestamp.After(now.Add(time.Hour)) {
-                        continue
-                }
-                
-                if activityEvent.Duration > 86400 {
-                        continue
-                }
-                
-                if activityEvent.ComputerName == "" || activityEvent.Username == "" {
-                        continue
-                }
-                
-                validEvents = append(validEvents, activityEvent)
-        }
-
-        if len(validEvents) == 0 {
-                c.JSON(http.StatusBadRequest, gin.H{"error": "No valid events in batch"})
-                return
-        }
-
         ctx := c.Request.Context()
-        if err := db.InsertActivityEventsBatch(ctx, validEvents); err != nil {
-                log.Printf("Failed to insert batch events: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save batch"})
+        now := time.Now()
+        
+        activityCount := 0
+        keyboardCount := 0
+        usbCount := 0
+        fileCount := 0
+        unknownCount := 0
+
+        for _, event := range req.Events {
+                switch event.Type {
+                case "activity":
+                        var activityData struct {
+                                ComputerName string `json:"computer_name"`
+                                Username     string `json:"username"`
+                                WindowTitle  string `json:"window_title"`
+                                ProcessName  string `json:"process_name"`
+                                ProcessPath  string `json:"process_path"`
+                                Duration     uint32 `json:"duration"`
+                                IdleTime     uint32 `json:"idle_time"`
+                                Category     string `json:"category"`
+                        }
+                        
+                        if err := json.Unmarshal(event.Data, &activityData); err != nil {
+                                log.Printf("Failed to unmarshal activity event: %v", err)
+                                continue
+                        }
+                        
+                        activityEvent := database.ActivityEvent{
+                                Timestamp:    event.Timestamp,
+                                ComputerName: activityData.ComputerName,
+                                Username:     activityData.Username,
+                                WindowTitle:  activityData.WindowTitle,
+                                ProcessName:  activityData.ProcessName,
+                                ProcessPath:  activityData.ProcessPath,
+                                Duration:     activityData.Duration,
+                                IdleTime:     activityData.IdleTime,
+                                Category:     activityData.Category,
+                        }
+                        
+                        if activityEvent.Timestamp.IsZero() {
+                                activityEvent.Timestamp = now
+                        }
+                        
+                        if activityEvent.ComputerName == "" || activityEvent.Username == "" {
+                                continue
+                        }
+                        if activityEvent.Duration > 86400 {
+                                continue
+                        }
+                        
+                        if err := db.InsertActivityEvent(ctx, activityEvent); err != nil {
+                                log.Printf("Failed to insert activity event: %v", err)
+                                continue
+                        }
+                        activityCount++
+
+                case "keyboard":
+                        var keyboardData database.KeyboardEvent
+                        if err := json.Unmarshal(event.Data, &keyboardData); err != nil {
+                                log.Printf("Failed to unmarshal keyboard event: %v", err)
+                                continue
+                        }
+                        
+                        if keyboardData.Timestamp.IsZero() {
+                                keyboardData.Timestamp = event.Timestamp
+                        }
+                        if keyboardData.Timestamp.IsZero() {
+                                keyboardData.Timestamp = now
+                        }
+                        
+                        if err := db.InsertKeyboardEvent(ctx, keyboardData); err != nil {
+                                log.Printf("Failed to insert keyboard event: %v", err)
+                                continue
+                        }
+                        keyboardCount++
+
+                case "usb":
+                        var usbData database.USBEvent
+                        if err := json.Unmarshal(event.Data, &usbData); err != nil {
+                                log.Printf("Failed to unmarshal USB event: %v", err)
+                                continue
+                        }
+                        
+                        if usbData.Timestamp.IsZero() {
+                                usbData.Timestamp = event.Timestamp
+                        }
+                        if usbData.Timestamp.IsZero() {
+                                usbData.Timestamp = now
+                        }
+                        
+                        if err := db.InsertUSBEvent(ctx, usbData); err != nil {
+                                log.Printf("Failed to insert USB event: %v", err)
+                                continue
+                        }
+                        usbCount++
+
+                case "file":
+                        var fileData database.FileCopyEvent
+                        if err := json.Unmarshal(event.Data, &fileData); err != nil {
+                                log.Printf("Failed to unmarshal file event: %v", err)
+                                continue
+                        }
+                        
+                        if fileData.Timestamp.IsZero() {
+                                fileData.Timestamp = event.Timestamp
+                        }
+                        if fileData.Timestamp.IsZero() {
+                                fileData.Timestamp = now
+                        }
+                        
+                        if err := db.InsertFileCopyEvent(ctx, fileData); err != nil {
+                                log.Printf("Failed to insert file event: %v", err)
+                                continue
+                        }
+                        fileCount++
+
+                default:
+                        log.Printf("Unknown event type '%s', ignoring", event.Type)
+                        unknownCount++
+                }
+        }
+
+        totalProcessed := activityCount + keyboardCount + usbCount + fileCount
+
+        if totalProcessed == 0 && unknownCount == 0 {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "No valid events in batch"})
                 return
         }
 
         c.JSON(http.StatusOK, gin.H{
                 "status":    "success",
-                "count":     len(validEvents),
                 "submitted": len(req.Events),
-                "message":   fmt.Sprintf("Successfully saved %d of %d events", len(validEvents), len(req.Events)),
+                "processed": totalProcessed,
+                "activity":  activityCount,
+                "keyboard":  keyboardCount,
+                "usb":       usbCount,
+                "file":      fileCount,
+                "ignored":   unknownCount,
+                "message":   fmt.Sprintf("Processed %d events (%d activity, %d keyboard, %d usb, %d file)", 
+                        totalProcessed, activityCount, keyboardCount, usbCount, fileCount),
         })
 }
 
