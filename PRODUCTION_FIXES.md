@@ -17,20 +17,20 @@
 
 ### Решение:
 
-✅ **Таблица УЖЕ ЕСТЬ в файле миграций `clickhouse/init.sql`!**
+✅ **БЕЗОПАСНАЯ МИГРАЦИЯ (исправлено для production с существующими индексами)**
 
-**Вариант А: Применить готовые миграции (РЕКОМЕНДУЕТСЯ)**
+**РЕКОМЕНДУЕМЫЙ СПОСОБ:**
 
 ```bash
 # 1. Подключиться к production серверу
 ssh user@monitor.net.gslaudit.ru
 
-# 2. Скопировать init.sql на production (если ещё нет)
-scp clickhouse/init.sql user@monitor.net.gslaudit.ru:/opt/monitoring/clickhouse/
+# 2. Скопировать безопасную миграцию на production
+scp clickhouse/add_activity_segments.sql user@monitor.net.gslaudit.ru:/opt/monitoring/clickhouse/
 
-# 3. Применить миграции через Docker
-cd /opt/monitoring
-docker exec -i clickhouse clickhouse-client --database=monitoring < clickhouse/init.sql
+# 3. Применить миграцию через Docker
+cd /opt/monitoring/clickhouse
+docker exec -i clickhouse clickhouse-client --database=monitoring < add_activity_segments.sql
 
 # Готово! ✅
 ```
@@ -39,9 +39,11 @@ docker exec -i clickhouse clickhouse-client --database=monitoring < clickhouse/i
 - ✅ Таблица `monitoring.activity_segments`
 - ✅ Materialized view `monitoring.daily_activity_summary`
 - ✅ Materialized view `monitoring.program_usage_daily`
-- ✅ Индексы для быстрого поиска
 
-**Примечание:** `CREATE TABLE IF NOT EXISTS` безопасен - не затрёт существующие таблицы!
+**Примечание:** 
+- `CREATE TABLE IF NOT EXISTS` безопасен - не затрёт существующие таблицы
+- Файл НЕ содержит `ALTER TABLE ADD INDEX` - не будет конфликтов с существующими индексами
+- Можно применять многократно без ошибок
 
 **Вариант Б: Через SQL файл**
 
