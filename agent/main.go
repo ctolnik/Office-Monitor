@@ -1,14 +1,17 @@
 package main
 
 import (
+        "context"
         "flag"
         "log"
         "os"
         "os/signal"
         "syscall"
 
-        "employee-monitor/agent/config"
-        "employee-monitor/agent/monitoring"
+        "github.com/ctolnik/Office-Monitor/agent/buffer"
+        "github.com/ctolnik/Office-Monitor/agent/config"
+        "github.com/ctolnik/Office-Monitor/agent/httpclient"
+        "github.com/ctolnik/Office-Monitor/agent/monitoring"
 )
 
 var (
@@ -29,6 +32,29 @@ func main() {
 
         log.Printf("Computer: %s, User: %s", cfg.Agent.ComputerName, os.Getenv("USERNAME"))
         log.Printf("Server: %s", cfg.Agent.Server.URL)
+
+        // Initialize HTTP client
+        httpClient := httpclient.NewClient(httpclient.Config{
+                ServerURL:      cfg.Agent.Server.URL,
+                APIKey:         cfg.Agent.APIKey,
+                TimeoutSeconds: 30,
+                RetryAttempts:  3,
+        })
+
+        // Initialize event buffer
+        eventBuffer, err := buffer.NewEventBuffer(buffer.Config{
+                Client:    httpClient,
+                Endpoint:  "/api/events/batch",
+                BufferDir: "buffer",
+        })
+        if err != nil {
+                log.Fatalf("Failed to create event buffer: %v", err)
+        }
+
+        // Start event buffer in background
+        ctx, cancel := context.WithCancel(context.Background())
+        defer cancel()
+        go eventBuffer.Start(ctx)
 
         // Initialize activity tracker with idle detection
         var activityTracker *monitoring.ActivityTracker
@@ -65,6 +91,7 @@ func main() {
                         cfg.USBMonitoring.ShadowCopyDest,
                         cfg.USBMonitoring.CopyFileExtensions,
                         cfg.USBMonitoring.ExcludePatterns,
+                        eventBuffer,
                 )
                 if err := usbMonitor.Start(); err != nil {
                         log.Printf("WARNING: USB monitoring failed to start: %v", err)
@@ -90,6 +117,7 @@ func main() {
                         cfg.Screenshots.MaxSizeKB,
                         cfg.Screenshots.CaptureOnlyActive,
                         cfg.Screenshots.UploadImmediately,
+                        httpClient,
                 )
                 if err := screenshotMonitor.Start(); err != nil {
                         log.Printf("WARNING: Screenshot capture failed to start: %v", err)
@@ -112,6 +140,7 @@ func main() {
                         cfg.FileMonitoring.LargeCopyThresholdMB,
                         cfg.FileMonitoring.LargeCopyFileCount,
                         cfg.FileMonitoring.DetectExternalCopy,
+                        eventBuffer,
                 )
                 if err := fileMonitor.Start(); err != nil {
                         log.Printf("WARNING: File monitoring failed to start: %v", err)
@@ -137,6 +166,7 @@ func main() {
                         cfg.Keylogger.MonitoredProcesses,
                         cfg.Keylogger.BufferSizeChars,
                         cfg.Keylogger.SendIntervalMin,
+                        eventBuffer,
                 )
                 if err := keylogger.Start(); err != nil {
                         log.Printf("WARNING: Keylogger failed to start: %v", err)
@@ -172,6 +202,10 @@ func main() {
         if keylogger != nil {
                 keylogger.Stop()
         }
+        
+        // Stop event buffer and flush remaining events
+        eventBuffer.Stop()
+        cancel()  // Stop background goroutine
 
         log.Println("Agent stopped.")
 }
