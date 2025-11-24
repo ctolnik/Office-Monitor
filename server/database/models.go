@@ -229,16 +229,18 @@ type ApplicationUsage struct {
 }
 
 type AlertFull struct {
-        ID             string    `json:"id"`
-        Timestamp      time.Time `json:"timestamp"`
-        ComputerName   string    `json:"computer_name"`
-        Username       string    `json:"username"`
-        AlertType      string    `json:"alert_type"`
-        Severity       string    `json:"severity"`
-        Description    string    `json:"description"`
-        Metadata       string    `json:"metadata"`
-        IsAcknowledged bool      `json:"is_acknowledged"`
-        AcknowledgedBy string    `json:"acknowledged_by"`
+        ID             string `json:"id"`
+        Timestamp      string `json:"timestamp"`
+        ComputerName   string `json:"computer_name"`
+        Username       string `json:"username"`
+        AlertType      string `json:"alert_type"`
+        Severity       string `json:"severity"`
+        Description    string `json:"description"`
+        Details        string `json:"details"`
+        Metadata       string `json:"metadata"`
+        IsAcknowledged bool   `json:"is_acknowledged"`
+        IsResolved     bool   `json:"is_resolved"`
+        AcknowledgedBy string `json:"acknowledged_by"`
         AcknowledgedAt *time.Time `json:"acknowledged_at"`
 }
 
@@ -252,6 +254,38 @@ type DailyReport struct {
         Applications      []ApplicationUsage       `json:"applications"`
         Screenshots       []ScreenshotMetadata     `json:"screenshots"`
         KeyboardActivity  []KeyboardPeriod         `json:"keyboard_activity"`
+        KeyboardPeriods   []KeyboardPeriod         `json:"keyboard_periods"`
+        ActivityEvents    []ActivityEvent          `json:"activity_events"`
+        FileEvents        []FileCopyEvent          `json:"file_events"`
         USBEvents         []USBEvent               `json:"usb_events"`
         Alerts            []AlertFull              `json:"alerts"`
+        DLPAlerts         []AlertFull              `json:"dlp_alerts"`
+        Summary           ActivitySummary          `json:"summary"`
+}
+
+type ActivitySummary struct {
+        Username          string  `json:"username"`
+        StartDate         string  `json:"start_date"`
+        EndDate           string  `json:"end_date"`
+        TotalActiveTime   uint64  `json:"total_active_time"`
+        TotalIdleTime     uint64  `json:"total_idle_time"`
+        ProductiveTime    uint64  `json:"productive_time"`
+        UnproductiveTime  uint64  `json:"unproductive_time"`
+        NeutralTime       uint64  `json:"neutral_time"`
+        FirstActivity     string  `json:"first_activity"`
+        LastActivity      string  `json:"last_activity"`
+        ProductivityScore float64 `json:"productivity_score"`
+}
+
+type ImportError struct {
+        Line        int    `json:"line"`
+        ProcessName string `json:"process_name"`
+        Error       string `json:"error"`
+}
+
+type ImportResult struct {
+        Success      int           `json:"success"`
+        Failed       int           `json:"failed"`
+        TotalRows    int           `json:"total_rows"`
+        Errors       []ImportError `json:"errors,omitempty"`
 }

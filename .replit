@@ -1,3 +1,4 @@
+modules = ["go-1.23"]
 [workflows]
 runButton = "Project"
 

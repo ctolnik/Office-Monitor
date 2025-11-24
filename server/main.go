@@ -15,9 +15,12 @@ import (
 )
 
 var (
-        db  *database.Database
-        st  *storage.Storage
-        cfg *config.Config
+        db            *database.Database
+        st            *storage.Storage
+        cfg           *config.Config
+        storageClient *storage.Storage
+        appLocation   *time.Location
+        dashCache     *DashboardCache
 )
 
 func main() {
@@ -27,13 +30,23 @@ func main() {
         if err != nil {
                 log.Fatalf("Failed to load config: %v", err)
         }
+        
+        // Initialize timezone
+        appLocation, err = time.LoadLocation(cfg.Database.Timezone)
+        if err != nil {
+                log.Printf("Failed to load timezone %s, using UTC: %v", cfg.Database.Timezone, err)
+                appLocation = time.UTC
+        }
+        
+        // Initialize cache with 30 second TTL
+        dashCache = NewDashboardCache(30 * time.Second)
 
         db, err = database.New(
-                cfg.Database.ClickHouse.Host,
-                cfg.Database.ClickHouse.Port,
-                cfg.Database.ClickHouse.Database,
-                cfg.Database.ClickHouse.Username,
-                cfg.Database.ClickHouse.Password,
+                cfg.Database.Host,
+                cfg.Database.Port,
+                cfg.Database.Database,
+                cfg.Database.Username,
+                cfg.Database.Password,
         )
         if err != nil {
                 log.Fatalf("Failed to connect to database: %v", err)
@@ -41,14 +54,18 @@ func main() {
         defer db.Close()
 
         st, err = storage.New(
-                cfg.Storage.MinIO.Endpoint,
-                cfg.Storage.MinIO.AccessKey,
-                cfg.Storage.MinIO.SecretKey,
-                cfg.Storage.MinIO.UseSSL,
+                cfg.Storage.Endpoint,
+                cfg.Storage.AccessKey,
+                cfg.Storage.SecretKey,
+                cfg.Storage.UseSSL,
+                cfg.Storage.PublicEndpoint,
+                cfg.Storage.Buckets.Screenshots,
+                cfg.Storage.Buckets.USBCopies,
         )
         if err != nil {
                 log.Fatalf("Failed to connect to MinIO: %v", err)
         }
+        storageClient = st
 
         if cfg.Server.Mode == "release" {
                 gin.SetMode(gin.ReleaseMode)
