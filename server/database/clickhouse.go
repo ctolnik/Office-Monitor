@@ -46,6 +46,36 @@ func (db *Database) InsertActivityEvent(ctx context.Context, event ActivityEvent
                 event.WindowTitle, event.ProcessName, event.Duration)
 }
 
+func (db *Database) InsertActivityEventsBatch(ctx context.Context, events []ActivityEvent) error {
+        if len(events) == 0 {
+                return nil
+        }
+
+        batch, err := db.conn.PrepareBatch(ctx, "INSERT INTO monitoring.activity_events (timestamp, computer_name, username, window_title, process_name, duration)")
+        if err != nil {
+                return fmt.Errorf("failed to prepare batch: %w", err)
+        }
+
+        for _, event := range events {
+                if err := batch.Append(
+                        event.Timestamp,
+                        event.ComputerName,
+                        event.Username,
+                        event.WindowTitle,
+                        event.ProcessName,
+                        event.Duration,
+                ); err != nil {
+                        return fmt.Errorf("failed to append event: %w", err)
+                }
+        }
+
+        if err := batch.Send(); err != nil {
+                return fmt.Errorf("failed to send batch: %w", err)
+        }
+
+        return nil
+}
+
 func (db *Database) InsertUSBEvent(ctx context.Context, event USBEvent) error {
         query := `INSERT INTO monitoring.usb_events 
                 (timestamp, computer_name, username, device_id, device_name, device_type, event_type, volume_serial)
@@ -232,7 +262,7 @@ func (db *Database) InsertActivitySegment(ctx context.Context, segment ActivityS
 
 func (db *Database) GetDailyActivitySummary(ctx context.Context, computerName string, date time.Time) (*DailyActivitySummary, error) {
         dateStr := date.Format("2006-01-02")
-        
+
         query := `SELECT 
                 state,
                 sum(total_seconds) as seconds
@@ -275,7 +305,7 @@ func (db *Database) GetDailyActivitySummary(ctx context.Context, computerName st
         usernameQuery := `SELECT DISTINCT username FROM monitoring.activity_segments 
                 WHERE computer_name = ? AND toDate(timestamp_start) = ? LIMIT 1`
         row := db.conn.QueryRow(ctx, usernameQuery, computerName, dateStr)
-        row.Scan(&summary.Username)
+        _ = row.Scan(&summary.Username)
 
         topProgramsQuery := `SELECT 
                 process_name,
@@ -314,7 +344,7 @@ func (db *Database) CreateProcessCatalogEntry(ctx context.Context, entry Process
         query := `INSERT INTO monitoring.process_catalog
                 (id, friendly_name, process_names, window_title_patterns, category, is_active, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        
+
         return db.conn.Exec(ctx, query,
                 entry.ID, entry.FriendlyName, entry.ProcessNames, entry.WindowTitlePatterns,
                 entry.Category, entry.IsActive, entry.CreatedAt, entry.UpdatedAt)
@@ -329,7 +359,7 @@ func (db *Database) UpdateProcessCatalogEntry(ctx context.Context, entry Process
                 is_active = ?,
                 updated_at = ?
                 WHERE id = ?`
-        
+
         return db.conn.Exec(ctx, query,
                 entry.FriendlyName, entry.ProcessNames, entry.WindowTitlePatterns,
                 entry.Category, entry.IsActive, entry.UpdatedAt, entry.ID)

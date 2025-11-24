@@ -138,17 +138,29 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**2025-11-24**: Code quality improvements and compilation fixes
-- **Build system**: Fixed all compilation errors for both server and agent
-- **Cross-platform support**: Added proper build tags for Windows/non-Windows builds
-- **Code cleanup**: Removed duplicate stub files, unified activity tracker signatures
-- **Model completeness**: Added all required fields to data models:
-  - `ActivitySummary`: Complete time tracking with productivity metrics
-  - `DailyReport`: ActivityEvents, FileEvents, KeyboardPeriods, DLPAlerts, Summary
-  - `ApplicationUsage`: ProcessName, WindowTitle, Duration, Count, Percentage
-  - `AlertFull`: Details, IsResolved fields
-- **Configuration**: Fixed database and storage initialization in main.go
-- **Agent dependencies**: Added httpclient and event buffer initialization
+**2025-11-24**: Merge conflict recovery and complete API restoration
+- **CRITICAL FIX**: Recovered 31 API endpoints lost in merge conflict 3db80ad
+  - Batch events API: `POST /api/events/batch` with `InsertActivityEventsBatch()` for bulk agent uploads
+  - Dashboard API (4): stats, active-now, daily reports, unresolved alerts
+  - Agents management (4): CRUD operations for agent configs
+  - Employees CRUD (4): full employee management API
+  - Reports per user (5): applications, keyboard, USB, files, screenshots
+  - Alerts (2): list all, resolve by ID
+  - Categories (7): CRUD, bulk update, import/export for app categorization
+  - Settings (3): general settings CRUD, logo upload
+  - Screenshot (1): file download endpoint
+- **Total API surface**: 47 REST endpoints (from 16 after merge conflict)
+- **Code quality**: 
+  - Formatted all files with gofmt/goimports
+  - Fixed unchecked errors (errcheck)
+  - Removed unused functions and ineffectual assignments
+  - All handlers properly registered in routes
+- **Build verification**: Server compiles successfully (43MB binary)
+- **Previous fixes maintained**:
+  - Cross-platform build tags for Windows/non-Windows
+  - Model completeness (ActivitySummary, DailyReport, etc.)
+  - Database and MinIO storage initialization
+  - Agent dependencies (httpclient, event buffer)
 
 **2025-11-23**: Added activity tracking and reporting features
 - **Activity segments tracking**: Implemented active/idle/offline state detection using GetLastInputInfo API

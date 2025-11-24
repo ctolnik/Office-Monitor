@@ -201,13 +201,12 @@ func (db *Database) BulkUpdateCategories(ctx context.Context, ids []string, cate
 	// Build placeholders for IN clause
 	placeholders := make([]string, len(ids))
 	args := make([]interface{}, 0, len(ids)+2)
-	
+
 	for i := range ids {
 		placeholders[i] = "?"
 		args = append(args, ids[i])
 	}
-	
-	args = append(args, category, updatedBy)
+
 
 	query := fmt.Sprintf(`
 		ALTER TABLE monitoring.application_categories
@@ -273,7 +272,7 @@ func matchProcessToCategoryInternal(processName string, categories []Application
 		if !cat.IsActive || cat.ProcessPattern == "" {
 			continue
 		}
-		
+
 		// Use filepath.Match for wildcard matching
 		matched, err := filepath.Match(strings.ToLower(cat.ProcessPattern), processLower)
 		if err == nil && matched {

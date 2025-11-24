@@ -80,6 +80,7 @@ func main() {
         api := router.Group("/api")
         {
                 api.POST("/activity", receiveActivityHandler)
+                api.POST("/events/batch", receiveBatchEventsHandler)
                 api.GET("/employees", getEmployeesHandler)
                 api.GET("/activity/recent", getRecentActivityHandler)
 
@@ -125,6 +126,20 @@ func main() {
 
                 api.GET("/alerts", getAlertsHandler)
                 api.PUT("/alerts/:id/resolve", resolveAlertHandler)
+
+                api.GET("/categories", getAppCategoriesHandler)
+                api.POST("/categories", createAppCategoryHandler)
+                api.PUT("/categories/:id", updateAppCategoryHandler)
+                api.DELETE("/categories/:id", deleteAppCategoryHandler)
+                api.POST("/categories/bulk", bulkUpdateAppCategoriesHandler)
+                api.GET("/categories/export", exportAppCategoriesHandler)
+                api.POST("/categories/import", importAppCategoriesHandler)
+
+                api.GET("/settings", getGeneralSettingsHandler)
+                api.PUT("/settings", updateGeneralSettingsHandler)
+                api.POST("/settings/logo", uploadLogoHandler)
+
+                api.GET("/screenshots/file/:id", getScreenshotHandler)
         }
 
         addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -157,6 +172,65 @@ func receiveActivityHandler(c *gin.Context) {
         }
 
         c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func receiveBatchEventsHandler(c *gin.Context) {
+        var events []database.ActivityEvent
+        if err := c.ShouldBindJSON(&events); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                return
+        }
+
+        if len(events) == 0 {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Empty batch"})
+                return
+        }
+
+        if len(events) > 10000 {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Batch too large (max 10000 events)"})
+                return
+        }
+
+        now := time.Now()
+        validEvents := make([]database.ActivityEvent, 0, len(events))
+        for i := range events {
+                if events[i].Timestamp.IsZero() {
+                        events[i].Timestamp = now
+                }
+                
+                if events[i].Timestamp.After(now.Add(time.Hour)) {
+                        continue
+                }
+                
+                if events[i].Duration > 86400 {
+                        continue
+                }
+                
+                if events[i].ComputerName == "" || events[i].Username == "" {
+                        continue
+                }
+                
+                validEvents = append(validEvents, events[i])
+        }
+
+        if len(validEvents) == 0 {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "No valid events in batch"})
+                return
+        }
+
+        ctx := context.Background()
+        if err := db.InsertActivityEventsBatch(ctx, validEvents); err != nil {
+                log.Printf("Failed to insert batch events: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save batch"})
+                return
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+                "status":    "success",
+                "count":     len(validEvents),
+                "submitted": len(events),
+                "message":   fmt.Sprintf("Successfully saved %d of %d events", len(validEvents), len(events)),
+        })
 }
 
 func getEmployeesHandler(c *gin.Context) {
