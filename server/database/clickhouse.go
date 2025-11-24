@@ -401,3 +401,75 @@ func (db *Database) DeleteProcessCatalogEntry(ctx context.Context, id string) er
 func (db *Database) Close() error {
         return db.conn.Close()
 }
+
+// GetUniqueUsernames returns list of unique usernames from activity events
+func (db *Database) GetUniqueUsernames(ctx context.Context) ([]string, error) {
+        query := `SELECT DISTINCT username 
+                  FROM monitoring.activity_events 
+                  WHERE timestamp > now() - INTERVAL 7 DAY
+                  ORDER BY username`
+        
+        rows, err := db.conn.Query(ctx, query)
+        if err != nil {
+                return nil, err
+        }
+        defer rows.Close()
+        
+        users := make([]string, 0)
+        for rows.Next() {
+                var username string
+                if err := rows.Scan(&username); err != nil {
+                        continue
+                }
+                users = append(users, username)
+        }
+        
+        return users, rows.Err()
+}
+
+// GetActivitySegments retrieves activity segments for a computer on a specific date
+func (db *Database) GetActivitySegments(ctx context.Context, computerName string, date time.Time) ([]ActivitySegment, error) {
+        dateStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+        dateEnd := dateStart.Add(24 * time.Hour)
+        
+        query := `SELECT 
+                timestamp_start, 
+                timestamp_end, 
+                duration_sec, 
+                state, 
+                computer_name, 
+                username, 
+                process_name, 
+                window_title
+        FROM monitoring.activity_segments
+        WHERE computer_name = ? 
+          AND timestamp_start >= ? 
+          AND timestamp_start < ?
+        ORDER BY timestamp_start ASC`
+        
+        rows, err := db.conn.Query(ctx, query, computerName, dateStart, dateEnd)
+        if err != nil {
+                return nil, err
+        }
+        defer rows.Close()
+        
+        segments := make([]ActivitySegment, 0)
+        for rows.Next() {
+                var seg ActivitySegment
+                if err := rows.Scan(
+                        &seg.TimestampStart,
+                        &seg.TimestampEnd,
+                        &seg.DurationSec,
+                        &seg.State,
+                        &seg.ComputerName,
+                        &seg.Username,
+                        &seg.ProcessName,
+                        &seg.WindowTitle,
+                ); err != nil {
+                        continue
+                }
+                segments = append(segments, seg)
+        }
+        
+        return segments, rows.Err()
+}

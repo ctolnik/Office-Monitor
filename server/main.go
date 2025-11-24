@@ -98,6 +98,7 @@ func main() {
 
                 api.POST("/activity/segment", receiveActivitySegmentHandler)
                 api.GET("/activity/summary", getDailyActivitySummaryHandler)
+                api.GET("/activity/segments", getActivitySegmentsHandler)
 
                 api.POST("/usb/event", receiveUSBEventHandler)
                 api.GET("/usb/events", getUSBEventsHandler)
@@ -129,6 +130,9 @@ func main() {
                 api.POST("/employees", createEmployeeHandler)
                 api.PUT("/employees/:id", updateEmployeeHandler)
                 api.DELETE("/employees/:id", deleteEmployeeHandler)
+                
+                // Users list (frontend compatibility - returns unique usernames)
+                api.GET("/users", getUsersListHandler)
 
                 api.GET("/activity/applications/:username", getApplicationsHandler)
                 api.GET("/keyboard/:username", getKeyboardEventsHandler2)
@@ -146,6 +150,9 @@ func main() {
                 api.POST("/categories/bulk", bulkUpdateAppCategoriesHandler)
                 api.GET("/categories/export", exportAppCategoriesHandler)
                 api.POST("/categories/import", importAppCategoriesHandler)
+                
+                // Frontend compatibility - alias for categories
+                api.GET("/settings/app-categories", getAppCategoriesHandler)
 
                 api.GET("/settings", getGeneralSettingsHandler)
                 api.PUT("/settings", updateGeneralSettingsHandler)
