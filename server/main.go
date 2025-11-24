@@ -7,9 +7,9 @@ import (
         "net/http"
         "time"
 
-        "employee-monitor/server/config"
-        "employee-monitor/server/database"
-        "employee-monitor/server/storage"
+        "github.com/ctolnik/Office-Monitor/server/config"
+        "github.com/ctolnik/Office-Monitor/server/database"
+        "github.com/ctolnik/Office-Monitor/server/storage"
 
         "github.com/gin-gonic/gin"
 )

@@ -2,7 +2,7 @@
 
 FROM golang:1.24.5-alpine AS builder
 
-WORKDIR /build
+WORKDIR /build/server
 
 # Install build dependencies
 RUN apk add --no-cache git gcc musl-dev
@@ -13,10 +13,9 @@ RUN go mod download
 
 # Copy source code
 COPY ./server .
-COPY ./web ./web
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o monitoring-server .
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server .
 
 # Final stage
 FROM alpine:3.22.2
@@ -29,13 +28,13 @@ WORKDIR /app
 COPY --from=builder /build/monitoring-server .
 
 # Copy static files and templates
-COPY --from=builder /build/web ./web
+COPY ./web ./web
 
 # Create log directory
 RUN mkdir -p /app/logs
 
 # Expose port
-EXPOSE 5000
+EXPOSE 8080
 
 # Run the server
 CMD ["./monitoring-server"]
