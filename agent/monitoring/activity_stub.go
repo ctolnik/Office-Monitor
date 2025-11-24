@@ -4,32 +4,30 @@
 package monitoring
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/ctolnik/Office-Monitor/agent/buffer"
-	"github.com/ctolnik/Office-Monitor/agent/httpclient"
+        "fmt"
 )
 
 // ActivityTracker monitors active window and process (stub for non-Windows)
 type ActivityTracker struct {
-	stopChan chan struct{}
+        stopChan chan struct{}
 }
 
 // NewActivityTracker creates a new activity tracker (stub)
-func NewActivityTracker(client *httpclient.Client, eventBuffer *buffer.EventBuffer, computerName string, intervalSec int) (*ActivityTracker, error) {
-	return &ActivityTracker{
-		stopChan: make(chan struct{}),
-	}, nil
+// Signature matches Windows implementation for cross-platform compatibility
+func NewActivityTracker(serverURL, computerName, username string, idleThresholdMin, pollIntervalSec int) *ActivityTracker {
+        return &ActivityTracker{
+                stopChan: make(chan struct{}),
+        }
 }
 
 // Start begins monitoring activity (stub)
-func (t *ActivityTracker) Start(ctx context.Context) error {
-	<-ctx.Done()
-	return fmt.Errorf("activity tracking not supported on this platform")
+func (t *ActivityTracker) Start() error {
+        return fmt.Errorf("activity tracking not supported on non-Windows platforms")
 }
 
 // Stop stops the activity tracker (stub)
 func (t *ActivityTracker) Stop() {
-	close(t.stopChan)
+        if t.stopChan != nil {
+                close(t.stopChan)
+        }
 }

@@ -72,18 +72,29 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Storage
 
-**Current Implementation**: SQLite database (file: `monitoring.db`)
+**Current Implementation**: ClickHouse database for time-series data + MinIO for file storage
 
-**Schema Structure**:
-- `activity_records` table: id, computer_name, username, window_title, process_name, duration, timestamp
-- Indexes on computer_name, username, and timestamp for optimized queries
+**Database Structure**:
+- **ClickHouse tables**:
+  - `activity_segments`: Time-based activity tracking (state, timestamps, duration, process, window title)
+  - `screenshots`: Screenshot metadata with MinIO object references
+  - `usb_events`: USB device connection/disconnection events
+  - `file_events`: File copy operations tracking
+  - `keyboard_events`: Keyboard activity periods (optional, requires legal compliance)
+  - `alerts`: DLP alerts and security events
+- **Indexes**: Optimized for time-range queries on computer_name, username, and timestamp
 
 **Implementation Details**:
+- Activity states: active (< 5min idle), idle (< 30min), offline (> 30min)
+- Window title parsing for browser URLs (Chrome, Firefox, Edge)
+- Process catalog for friendly names (chrome.exe → "Google Chrome")
+- Daily activity summaries with productivity scoring
 - Empty arrays returned instead of null for consistent API responses
-- Automatic table creation on first startup
-- Status calculation based on last activity time (active < 5min, idle < 30min, offline > 30min)
 
-**Design Consideration**: The architecture uses SQLite for simplicity but can be migrated to PostgreSQL or other databases with minimal refactoring.
+**MinIO Storage**:
+- Screenshots stored with retention policy (configurable, default 30 days)
+- USB shadow copy files stored with configurable retention
+- Automatic cleanup based on retention policies
 
 ### Authentication and Authorization
 
@@ -117,14 +128,27 @@ Preferred communication style: Simple, everyday language.
 
 ### Go Libraries (Server)
 - `github.com/gin-gonic/gin` - Web framework for HTTP routing and middleware
-- `github.com/mattn/go-sqlite3` - SQLite database driver with CGO
+- ClickHouse Go driver - Time-series database connectivity
+- MinIO Go SDK - Object storage for screenshots and files
 
 ### No External Services
 - No third-party APIs or cloud services
 - Self-contained system designed for on-premise deployment
-- No external databases required (uses SQLite file-based storage)
+- Uses ClickHouse and MinIO containers (included in docker-compose.yml)
 
 ## Recent Changes
+
+**2025-11-24**: Code quality improvements and compilation fixes
+- **Build system**: Fixed all compilation errors for both server and agent
+- **Cross-platform support**: Added proper build tags for Windows/non-Windows builds
+- **Code cleanup**: Removed duplicate stub files, unified activity tracker signatures
+- **Model completeness**: Added all required fields to data models:
+  - `ActivitySummary`: Complete time tracking with productivity metrics
+  - `DailyReport`: ActivityEvents, FileEvents, KeyboardPeriods, DLPAlerts, Summary
+  - `ApplicationUsage`: ProcessName, WindowTitle, Duration, Count, Percentage
+  - `AlertFull`: Details, IsResolved fields
+- **Configuration**: Fixed database and storage initialization in main.go
+- **Agent dependencies**: Added httpclient and event buffer initialization
 
 **2025-11-23**: Added activity tracking and reporting features
 - **Activity segments tracking**: Implemented active/idle/offline state detection using GetLastInputInfo API
