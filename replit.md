@@ -66,6 +66,15 @@ Preferred communication style: Simple, everyday language.
 - Periodically sends data to server via HTTP API
 - Runs as background process
 
+**Reliability Features**:
+- **Circuit Breaker**: Sony/gobreaker library prevents overwhelming unavailable server
+  - Opens after 60% failure rate (min 3 requests)
+  - Auto-recovery after 30s timeout
+  - Protects server from spike after downtime
+- **Retry Logic**: 3 attempts with 5s delay for transient errors
+- **Event Buffer**: 1000-event memory buffer + disk persistence for offline operation
+- **Graceful Shutdown**: No data loss on restart
+
 **Build Process**: Cross-compilation support (GOOS=windows GOARCH=amd64) allows building Windows executables from Linux/Mac environments
 
 **Rationale**: Go enables building a single executable without runtime dependencies, simplifying deployment to employee workstations.
@@ -137,6 +146,21 @@ Preferred communication style: Simple, everyday language.
 - Uses ClickHouse and MinIO containers (included in docker-compose.yml)
 
 ## Recent Changes
+
+**2025-11-24 (late evening)**: Added Circuit Breaker to agent
+- **Library**: Integrated sony/gobreaker v1.0.0 for production-grade circuit breaker
+- **Configuration**:
+  - Opens after 60% failure rate (minimum 3 requests)
+  - Half-open after 30s timeout
+  - Max 3 requests in half-open state
+  - 60s interval for clearing failure counts
+- **Integration**: Wrapped all HTTP client methods (PostJSON, PostMultipart)
+- **Benefits**: 
+  - Fast-fail when server unavailable (no timeout waits)
+  - Auto-recovery when server returns
+  - Protects server from spike after downtime
+  - Events buffered to disk during outage
+- **Logging**: Circuit breaker state changes logged for monitoring
 
 **2025-11-24 (evening)**: Fixed zapctx panic - comprehensive solution
 - **Critical bug fix**: Server was panicking on `/api/dashboard/stats` with "context without logger"

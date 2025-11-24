@@ -11,15 +11,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sony/gobreaker"
 )
 
-// Client represents an HTTP client with retry logic and authentication
+// Client represents an HTTP client with retry logic, circuit breaker, and authentication
 type Client struct {
-	serverURL     string
-	apiKey        string
-	httpClient    *http.Client
-	retryAttempts int
-	retryDelay    time.Duration
+	serverURL      string
+	apiKey         string
+	httpClient     *http.Client
+	retryAttempts  int
+	retryDelay     time.Duration
+	circuitBreaker *gobreaker.CircuitBreaker
 }
 
 // Config holds configuration for the HTTP client
@@ -31,7 +33,7 @@ type Config struct {
 	RetryDelay     time.Duration
 }
 
-// NewClient creates a new HTTP client
+// NewClient creates a new HTTP client with circuit breaker
 func NewClient(cfg Config) *Client {
 	if cfg.TimeoutSeconds == 0 {
 		cfg.TimeoutSeconds = 30
@@ -43,18 +45,34 @@ func NewClient(cfg Config) *Client {
 		cfg.RetryDelay = 5 * time.Second
 	}
 
+	// Configure circuit breaker
+	cbSettings := gobreaker.Settings{
+		Name:        "MonitoringServerAPI",
+		MaxRequests: 3,                // Max requests allowed in half-open state
+		Interval:    60 * time.Second, // Period to clear failure counts
+		Timeout:     30 * time.Second, // Time to wait before half-open after open
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+			return counts.Requests >= 3 && failureRatio >= 0.6
+		},
+		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
+			log.Printf("Circuit breaker '%s' state changed: %s -> %s", name, from, to)
+		},
+	}
+
 	return &Client{
-		serverURL:     cfg.ServerURL,
-		apiKey:        cfg.APIKey,
-		retryAttempts: cfg.RetryAttempts,
-		retryDelay:    cfg.RetryDelay,
+		serverURL:      cfg.ServerURL,
+		apiKey:         cfg.APIKey,
+		retryAttempts:  cfg.RetryAttempts,
+		retryDelay:     cfg.RetryDelay,
+		circuitBreaker: gobreaker.NewCircuitBreaker(cbSettings),
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second,
 		},
 	}
 }
 
-// PostJSON sends a POST request with JSON body
+// PostJSON sends a POST request with JSON body (protected by circuit breaker)
 func (c *Client) PostJSON(ctx context.Context, endpoint string, payload interface{}) error {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
@@ -91,7 +109,9 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, payload interfac
 		}
 
 		start := time.Now()
-		resp, err := c.httpClient.Do(req)
+
+		// Execute request through circuit breaker
+		resp, err := c.executeWithCircuitBreaker(req)
 		duration := time.Since(start)
 
 		if err != nil {
@@ -158,7 +178,8 @@ func (c *Client) PostMultipart(ctx context.Context, endpoint string, body io.Rea
 			req.Header.Set("X-API-Key", c.apiKey)
 		}
 
-		resp, err := c.httpClient.Do(req)
+		// Execute request through circuit breaker
+		resp, err := c.executeWithCircuitBreaker(req)
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
 			continue
@@ -202,4 +223,17 @@ func (c *Client) Ping(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// executeWithCircuitBreaker wraps HTTP request execution with circuit breaker protection
+func (c *Client) executeWithCircuitBreaker(req *http.Request) (*http.Response, error) {
+	result, err := c.circuitBreaker.Execute(func() (interface{}, error) {
+		return c.httpClient.Do(req)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result.(*http.Response), nil
 }

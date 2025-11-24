@@ -7,3 +7,5 @@ require (
 	golang.org/x/sys v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+require github.com/sony/gobreaker v1.0.0 // indirect
