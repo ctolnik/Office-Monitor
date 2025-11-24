@@ -58,9 +58,9 @@ func main() {
                 cfg.Storage.AccessKey,
                 cfg.Storage.SecretKey,
                 cfg.Storage.UseSSL,
-                cfg.Storage.PublicEndpoint,
                 cfg.Storage.Buckets.Screenshots,
                 cfg.Storage.Buckets.USBCopies,
+                cfg.Storage.PublicEndpoint,
         )
         if err != nil {
                 log.Fatalf("Failed to connect to MinIO: %v", err)
