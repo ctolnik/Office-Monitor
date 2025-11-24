@@ -170,12 +170,63 @@ type ApplicationCategory struct {
 }
 
 type KeyboardPeriod struct {
-        Start           time.Time `json:"start"`
-        End             time.Time `json:"end"`
-        ComputerName    string    `json:"computer_name"`
-        Username        string    `json:"username"`
-        ProcessName     string    `json:"process_name"`
-        WindowTitle     string    `json:"window_title"`
-        TextContent     string    `json:"text_content"`
-        CharacterCount  int       `json:"character_count"`
+        Start          string `json:"start"`
+        End            string `json:"end"`
+        ComputerName   string `json:"computer_name"`
+        Username       string `json:"username"`
+        Application    string `json:"application"`
+        ProcessName    string `json:"process_name"`
+        WindowTitle    string `json:"window_title"`
+        FormattedText  string `json:"formatted_text"`
+        RawKeys        string `json:"raw_keys"`
+        CharacterCount int    `json:"character_count"`
+}
+
+type DashboardStats struct {
+        TotalAgents       int     `json:"total_agents"`
+        OnlineAgents      int     `json:"online_agents"`
+        IdleAgents        int     `json:"idle_agents"`
+        OfflineAgents     int     `json:"offline_agents"`
+        TotalAlerts       int     `json:"total_alerts"`
+        CriticalAlerts    int     `json:"critical_alerts"`
+        TotalScreenshots  int     `json:"total_screenshots"`
+        AverageActivity   float64 `json:"average_activity"`
+}
+
+type ApplicationUsage struct {
+        ApplicationName string  `json:"application_name"`
+        Category        string  `json:"category"`
+        TotalDuration   uint64  `json:"total_duration"`
+        SessionCount    int     `json:"session_count"`
+        UniqueUsers     int     `json:"unique_users"`
+        ProductiveTime  uint64  `json:"productive_time"`
+        UnproductiveTime uint64 `json:"unproductive_time"`
+}
+
+type AlertFull struct {
+        ID             string    `json:"id"`
+        Timestamp      time.Time `json:"timestamp"`
+        ComputerName   string    `json:"computer_name"`
+        Username       string    `json:"username"`
+        AlertType      string    `json:"alert_type"`
+        Severity       string    `json:"severity"`
+        Description    string    `json:"description"`
+        Metadata       string    `json:"metadata"`
+        IsAcknowledged bool      `json:"is_acknowledged"`
+        AcknowledgedBy string    `json:"acknowledged_by"`
+        AcknowledgedAt *time.Time `json:"acknowledged_at"`
+}
+
+type DailyReport struct {
+        Date              string                   `json:"date"`
+        ComputerName      string                   `json:"computer_name"`
+        Username          string                   `json:"username"`
+        TotalActiveTime   uint64                   `json:"total_active_time"`
+        TotalIdleTime     uint64                   `json:"total_idle_time"`
+        ProductivityScore float64                  `json:"productivity_score"`
+        Applications      []ApplicationUsage       `json:"applications"`
+        Screenshots       []ScreenshotMetadata     `json:"screenshots"`
+        KeyboardActivity  []KeyboardPeriod         `json:"keyboard_activity"`
+        USBEvents         []USBEvent               `json:"usb_events"`
+        Alerts            []AlertFull              `json:"alerts"`
 }

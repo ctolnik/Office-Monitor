@@ -1,0 +1,26 @@
+ => ERROR [builder 7/7] RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server .                                                                                                                                                                       18.7s
+------
+ > [builder 7/7] RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server .:
+12.99 # github.com/ctolnik/Office-Monitor/server/database
+12.99 database/frontend_queries.go:268:62: undefined: DashboardStats
+12.99 database/frontend_queries.go:460:104: undefined: ApplicationUsage
+12.99 database/frontend_queries.go:532:107: undefined: AlertFull
+12.99 database/frontend_queries.go:782:92: undefined: DailyReport
+12.99 database/categories.go:438:18: currentPeriod.Application undefined (type *KeyboardPeriod has no field or method Application)
+12.99 database/categories.go:447:20: cannot use event.Timestamp.Format(time.RFC3339) (value of type string) as time.Time value in struct literal
+12.99 database/categories.go:448:20: cannot use event.Timestamp.Format(time.RFC3339) (value of type string) as time.Time value in struct literal
+12.99 database/categories.go:449:5: unknown field Application in struct literal of type KeyboardPeriod
+12.99 database/categories.go:451:5: unknown field FormattedText in struct literal of type KeyboardPeriod
+12.99 database/categories.go:452:5: unknown field RawKeys in struct literal of type KeyboardPeriod
+12.99 database/categories.go:452:5: too many errors
+------
+Dockerfile:18
+--------------------
+  16 |
+  17 |     # Build the application
+  18 | >>> RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server .
+  19 |
+  20 |     # Final stage
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server ." did not complete successfully: exit code: 1
+ERROR: Service 'server' failed to build : Build failed
