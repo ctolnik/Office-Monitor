@@ -1,7 +1,6 @@
 package main
 
 import (
-        "context"
         "fmt"
         "log"
         "net/http"
@@ -12,6 +11,7 @@ import (
         "github.com/ctolnik/Office-Monitor/server/storage"
 
         "github.com/gin-gonic/gin"
+        "go.uber.org/zap"
 )
 
 var (
@@ -21,10 +21,18 @@ var (
         storageClient *storage.Storage
         appLocation   *time.Location
         dashCache     *DashboardCache
+        logger        *zap.Logger
 )
 
 func main() {
         var err error
+
+        // Initialize logger
+        logger, err = zap.NewProduction()
+        if err != nil {
+                log.Fatalf("Failed to initialize logger: %v", err)
+        }
+        defer logger.Sync()
 
         cfg, err = config.Load("config.yaml")
         if err != nil {
@@ -72,6 +80,10 @@ func main() {
         }
 
         router := gin.Default()
+        
+        // Add logger middleware to all routes
+        router.Use(loggerMiddleware(logger))
+        
         router.LoadHTMLGlob("web/templates/*")
         router.Static("/static", "web/static")
 
@@ -164,7 +176,7 @@ func receiveActivityHandler(c *gin.Context) {
                 event.Timestamp = time.Now()
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.InsertActivityEvent(ctx, event); err != nil {
                 log.Printf("Failed to insert activity: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
@@ -218,7 +230,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                 return
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.InsertActivityEventsBatch(ctx, validEvents); err != nil {
                 log.Printf("Failed to insert batch events: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save batch"})
@@ -234,7 +246,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
 }
 
 func getEmployeesHandler(c *gin.Context) {
-        ctx := context.Background()
+        ctx := c.Request.Context()
         employees, err := db.GetActiveEmployees(ctx)
         if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employees"})
@@ -245,7 +257,7 @@ func getEmployeesHandler(c *gin.Context) {
 }
 
 func getRecentActivityHandler(c *gin.Context) {
-        ctx := context.Background()
+        ctx := c.Request.Context()
         records, err := db.GetRecentActivity(ctx, 100)
         if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activity"})
@@ -266,7 +278,7 @@ func receiveUSBEventHandler(c *gin.Context) {
                 event.Timestamp = time.Now()
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.InsertUSBEvent(ctx, event); err != nil {
                 log.Printf("Failed to insert USB event: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
@@ -289,7 +301,7 @@ func getUSBEventsHandler(c *gin.Context) {
         from, _ := time.Parse(time.RFC3339, fromStr)
         to, _ := time.Parse(time.RFC3339, toStr)
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         events, err := db.GetUSBEvents(ctx, computerName, from, to)
         if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
@@ -310,7 +322,7 @@ func receiveFileEventHandler(c *gin.Context) {
                 event.Timestamp = time.Now()
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.InsertFileCopyEvent(ctx, event); err != nil {
                 log.Printf("Failed to insert file event: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
@@ -333,7 +345,7 @@ func getFileEventsHandler(c *gin.Context) {
         from, _ := time.Parse(time.RFC3339, fromStr)
         to, _ := time.Parse(time.RFC3339, toStr)
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         events, err := db.GetFileEvents(ctx, computerName, from, to)
         if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
@@ -364,7 +376,7 @@ func receiveScreenshotHandler(c *gin.Context) {
                 screenshot.Timestamp = time.Now()
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
 
         minioPath, err := st.UploadScreenshot(ctx, screenshot.ScreenshotID, screenshot.ImageData)
         if err != nil {
@@ -404,7 +416,7 @@ func receiveKeyboardEventHandler(c *gin.Context) {
                 event.Timestamp = time.Now()
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.InsertKeyboardEvent(ctx, event); err != nil {
                 log.Printf("Failed to insert keyboard event: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
@@ -427,7 +439,7 @@ func getKeyboardEventsHandler(c *gin.Context) {
         from, _ := time.Parse(time.RFC3339, fromStr)
         to, _ := time.Parse(time.RFC3339, toStr)
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         events, err := db.GetKeyboardEvents(ctx, computerName, from, to)
         if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
@@ -451,7 +463,7 @@ func receiveActivitySegmentHandler(c *gin.Context) {
                 segment.TimestampEnd = segment.TimestampStart
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.InsertActivitySegment(ctx, segment); err != nil {
                 log.Printf("Failed to insert activity segment: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
@@ -475,7 +487,7 @@ func getDailyActivitySummaryHandler(c *gin.Context) {
                 return
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         summary, err := db.GetDailyActivitySummary(ctx, computerName, date)
         if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch summary"})
@@ -486,7 +498,7 @@ func getDailyActivitySummaryHandler(c *gin.Context) {
 }
 
 func getProcessCatalogHandler(c *gin.Context) {
-        ctx := context.Background()
+        ctx := c.Request.Context()
         entries, err := db.GetProcessCatalog(ctx)
         if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch catalog"})
@@ -508,7 +520,7 @@ func createProcessCatalogHandler(c *gin.Context) {
         entry.UpdatedAt = time.Now()
         entry.IsActive = true
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.CreateProcessCatalogEntry(ctx, entry); err != nil {
                 log.Printf("Failed to create process catalog entry: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})
@@ -534,7 +546,7 @@ func updateProcessCatalogHandler(c *gin.Context) {
         entry.ID = id
         entry.UpdatedAt = time.Now()
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.UpdateProcessCatalogEntry(ctx, entry); err != nil {
                 log.Printf("Failed to update process catalog entry: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
@@ -551,7 +563,7 @@ func deleteProcessCatalogHandler(c *gin.Context) {
                 return
         }
 
-        ctx := context.Background()
+        ctx := c.Request.Context()
         if err := db.DeleteProcessCatalogEntry(ctx, id); err != nil {
                 log.Printf("Failed to delete process catalog entry: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})

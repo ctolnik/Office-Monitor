@@ -10,10 +10,10 @@ import (
 
 // DashboardCache holds cached dashboard statistics with TTL
 type DashboardCache struct {
-	mu    sync.RWMutex
-	stats *database.DashboardStats
+	mu       sync.RWMutex
+	stats    *database.DashboardStats
 	cachedAt time.Time
-	ttl   time.Duration
+	ttl      time.Duration
 }
 
 // NewDashboardCache creates a new dashboard cache with specified TTL
@@ -25,6 +25,9 @@ func NewDashboardCache(ttl time.Duration) *DashboardCache {
 
 // Get returns cached stats if available and not expired, otherwise fetches fresh data
 func (dc *DashboardCache) Get(ctx context.Context, db *database.Database) (*database.DashboardStats, error) {
+	// Ensure context has logger to prevent zapctx panics
+	ctx = withLogger(ctx)
+
 	// Try read lock first
 	dc.mu.RLock()
 	if dc.stats != nil && time.Since(dc.cachedAt) < dc.ttl {

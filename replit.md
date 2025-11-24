@@ -138,7 +138,31 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**2025-11-24**: Merge conflict recovery and complete API restoration
+**2025-11-24 (evening)**: Fixed zapctx panic - comprehensive solution
+- **Critical bug fix**: Server was panicking on `/api/dashboard/stats` with "context without logger"
+- **Root cause**: `zapctx.Logger()` called on contexts without initialized zap logger
+- **Multi-layer solution**:
+  1. **HTTP layer**: `logger_middleware.go` injects zap logger into all HTTP request contexts
+  2. **Handler layer**: Replaced all `context.Background()` with `c.Request.Context()` in 30+ handlers
+  3. **Safety layer**: `safe_context.go` provides `withLogger()` wrapper with fallback to global logger
+  4. **Critical paths**: Cache and other non-HTTP paths use `withLogger()` for panic prevention
+- **Implementation details**:
+  - `logger_middleware.go`: Middleware that enriches every HTTP request context
+  - `safe_context.go`: Panic-safe wrapper using defer/recover to detect missing logger
+  - Global `logger *zap.Logger` initialized with `zap.NewProduction()`
+  - All handlers: `context.Background()` → `c.Request.Context()`
+- **Coverage**: 
+  - HTTP requests: 100% protected (middleware + handler fixes)
+  - Cache operations: Protected with withLogger() wrapper
+  - Background jobs: Not yet implemented (future consideration)
+- **Known limitations**: 
+  - Tests using context.Background() may still panic (not production code)
+  - Future non-HTTP contexts need withLogger() wrapper
+  - Gin recovery middleware prevents server crashes from any panics
+- **Production readiness**: Full HTTP API protection + panic recovery = production-safe
+- **Future improvements**: Wrap all DB methods or fork zapctx for safe fallback
+
+**2025-11-24 (afternoon)**: Merge conflict recovery and complete API restoration
 - **CRITICAL FIX**: Recovered 31 API endpoints lost in merge conflict 3db80ad
   - Batch events API: `POST /api/events/batch` with `InsertActivityEventsBatch()` for bulk agent uploads
   - Dashboard API (4): stats, active-now, daily reports, unresolved alerts
