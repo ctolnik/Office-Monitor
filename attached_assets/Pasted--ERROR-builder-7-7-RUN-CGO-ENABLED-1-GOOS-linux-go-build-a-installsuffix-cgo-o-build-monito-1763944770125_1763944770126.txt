@@ -1,0 +1,27 @@
+ => ERROR [builder 7/7] RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server .                                                                                                                                                                       18.5s
+------
+ > [builder 7/7] RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server .:
+12.92 # github.com/ctolnik/Office-Monitor/server/database
+12.92 database/frontend_queries.go:280:46: stats.TotalEmployees undefined (type *DashboardStats has no field or method TotalEmployees)
+12.92 database/frontend_queries.go:289:49: stats.ActiveNow undefined (type *DashboardStats has no field or method ActiveNow)
+12.92 database/frontend_queries.go:295:8: stats.Offline undefined (type *DashboardStats has no field or method Offline)
+12.92 database/frontend_queries.go:295:24: stats.TotalEmployees undefined (type *DashboardStats has no field or method TotalEmployees)
+12.92 database/frontend_queries.go:295:47: stats.ActiveNow undefined (type *DashboardStats has no field or method ActiveNow)
+12.92 database/frontend_queries.go:313:43: stats.UnresolvedAlerts undefined (type *DashboardStats has no field or method UnresolvedAlerts)
+12.92 database/frontend_queries.go:315:9: stats.UnresolvedAlerts undefined (type *DashboardStats has no field or method UnresolvedAlerts)
+12.92 database/frontend_queries.go:322:50: stats.TodayScreenshots undefined (type *DashboardStats has no field or method TodayScreenshots)
+12.92 database/frontend_queries.go:324:9: stats.TodayScreenshots undefined (type *DashboardStats has no field or method TodayScreenshots)
+12.92 database/frontend_queries.go:331:50: stats.TodayUSBEvents undefined (type *DashboardStats has no field or method TodayUSBEvents)
+12.92 database/frontend_queries.go:331:50: too many errors
+------
+Dockerfile:18
+--------------------
+  16 |
+  17 |     # Build the application
+  18 | >>> RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server .
+  19 |
+  20 |     # Final stage
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring-server ." did not complete successfully: exit code: 1
+ERROR: Service 'server' failed to build : Build failed
+make: *** [Makefile:48: docker-build] Error 1
