@@ -8,7 +8,10 @@ type ActivityEvent struct {
         Username     string    `json:"username"`
         WindowTitle  string    `json:"window_title"`
         ProcessName  string    `json:"process_name"`
+        ProcessPath  string    `json:"process_path"`
         Duration     uint32    `json:"duration"`
+        IdleTime     uint32    `json:"idle_time"`
+        Category     string    `json:"category"`
 }
 
 type KeyboardEvent struct {
@@ -207,16 +210,22 @@ type DashboardStats struct {
         TodayScreenshots  int     `json:"today_screenshots"`
         TodayUSBEvents    int     `json:"today_usb_events"`
         TodayFileEvents   int     `json:"today_file_events"`
+        AvgProductivity   float64 `json:"avg_productivity"`
 }
 
 type ApplicationUsage struct {
-        ApplicationName string  `json:"application_name"`
-        Category        string  `json:"category"`
-        TotalDuration   uint64  `json:"total_duration"`
-        SessionCount    int     `json:"session_count"`
-        UniqueUsers     int     `json:"unique_users"`
-        ProductiveTime  uint64  `json:"productive_time"`
-        UnproductiveTime uint64 `json:"unproductive_time"`
+        ApplicationName  string  `json:"application_name"`
+        Category         string  `json:"category"`
+        TotalDuration    uint64  `json:"total_duration"`
+        SessionCount     int     `json:"session_count"`
+        UniqueUsers      int     `json:"unique_users"`
+        ProductiveTime   uint64  `json:"productive_time"`
+        UnproductiveTime uint64  `json:"unproductive_time"`
+        ProcessName      string  `json:"process_name"`
+        WindowTitle      string  `json:"window_title"`
+        Duration         uint64  `json:"duration"`
+        Count            int     `json:"count"`
+        Percentage       float64 `json:"percentage"`
 }
 
 type AlertFull struct {
