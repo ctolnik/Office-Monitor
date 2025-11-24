@@ -36,3 +36,4 @@ WARP.md
 /docs
 frontend
 server/monitoring-server
+server/monitoring.db
