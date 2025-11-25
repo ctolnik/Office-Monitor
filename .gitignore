@@ -31,6 +31,7 @@ go.work.sum
 .idea/
 .vscode/
 server/main
+server/config.yaml
 .DS_Store
 WARP.md
 /docs
