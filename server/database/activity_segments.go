@@ -31,8 +31,15 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
                 ORDER BY timestamp_start ASC
                 LIMIT 10000`, startStr, endStr)
 
+        zap.L().Info("GetActivitySegmentsByUsername",
+                zap.String("username", username),
+                zap.String("start", startStr),
+                zap.String("end", endStr),
+                zap.String("query", query))
+
         rows, err := db.conn.Query(ctx, query, username)
         if err != nil {
+                zap.L().Error("Query failed", zap.Error(err), zap.String("query", query))
                 return nil, err
         }
         defer rows.Close()
@@ -62,6 +69,10 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
                 return nil, err
         }
 
+        zap.L().Info("GetActivitySegmentsByUsername result",
+                zap.String("username", username),
+                zap.Int("segments_count", len(segments)))
+
         return segments, nil
 }
 
@@ -85,8 +96,14 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 ORDER BY total_duration DESC
                 LIMIT 50`, startStr, endStr)
 
+        zap.L().Info("GetApplicationUsageFromSegments",
+                zap.String("username", username),
+                zap.String("start", startStr),
+                zap.String("end", endStr))
+
         rows, err := db.conn.Query(ctx, query, username)
         if err != nil {
+                zap.L().Error("Query failed", zap.Error(err))
                 return nil, err
         }
         defer rows.Close()
@@ -114,6 +131,10 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 zap.L().Error("Error iterating application usage rows", zap.Error(err))
                 return nil, err
         }
+
+        zap.L().Info("GetApplicationUsageFromSegments result",
+                zap.String("username", username),
+                zap.Int("apps_count", len(apps)))
 
         return apps, nil
 }

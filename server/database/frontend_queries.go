@@ -792,6 +792,13 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
         startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
         endOfDay := startOfDay.Add(24 * time.Hour)
 
+        zapctx.Info(ctx, "GetDailyReport called",
+                zap.String("username", username),
+                zap.String("date", date.Format("2006-01-02")),
+                zap.String("startOfDay", startOfDay.Format("2006-01-02 15:04:05 MST")),
+                zap.String("endOfDay", endOfDay.Format("2006-01-02 15:04:05 MST")),
+                zap.String("timezone", date.Location().String()))
+
         // Get activity segments (primary source of activity data)
         activitySegments, err := db.GetActivitySegmentsByUsername(ctx, username, startOfDay, endOfDay)
         if err != nil {
@@ -907,6 +914,14 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
         } else {
                 productivityScore = 0.0
         }
+
+        zapctx.Info(ctx, "GetDailyReport completed",
+                zap.String("username", username),
+                zap.Int("activity_events_count", len(report.ActivityEvents)),
+                zap.Int("applications_count", len(report.Applications)),
+                zap.Int("screenshots_count", len(report.Screenshots)),
+                zap.Int("usb_events_count", len(report.USBEvents)),
+                zap.Int("file_events_count", len(report.FileEvents)))
 
         // Get actual first and last activity timestamps
         firstActivity := startOfDay.Format(time.RFC3339)
