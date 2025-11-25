@@ -84,11 +84,11 @@ type FileCopyConfig struct {
 }
 
 type LoggingConfig struct {
-	Level      string `yaml:"info"`
-	File       string `yaml:"/app/logs/server.log"`
-	MaxSize    int    `yaml:"100"`
-	MaxBackups int    `yaml:"10"`
-	MaxAgeDays int    `yaml:"30"`
+	Level      string `yaml:"level"`
+	File       string `yaml:"file"`
+	MaxSize    int    `yaml:"max_size_mb"`
+	MaxBackups int    `yaml:"max_backups"`
+	MaxAgeDays int    `yaml:"max_age_days"`
 }
 
 func Load(configPath string) (*Config, error) {
@@ -109,6 +109,12 @@ func Load(configPath string) (*Config, error) {
 	}
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 5000
+	}
+	if cfg.Logging.Level == "" {
+		cfg.Logging.Level = "info"
+	}
+	if cfg.Logging.File == "" {
+		cfg.Logging.File = "/app/logs/server.log"
 	}
 
 	return &cfg, nil
