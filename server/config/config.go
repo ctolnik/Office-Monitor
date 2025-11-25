@@ -11,6 +11,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Storage  StorageConfig  `yaml:"storage"`
+	Logging  LoggingConfig  `yaml:"logging"`
 	// Monitoring MonitoringConfig `yaml:"monitoring"`
 }
 
@@ -20,13 +21,6 @@ type ServerConfig struct {
 	Mode   string `yaml:"mode"`
 	APIKey string `yaml:"api_key"`
 }
-
-// type ServerConfig struct {
-// 	Host   string `yaml:"host" env: "OM_HOST" envDefault: "0.0.0.0"`
-// 	Port   int    `yaml:"port" env: "OM_PORT" envDefault:"5000"`
-// 	Mode   string `yaml:"mode" env: "OM_MODE" envDefault: "prod"`
-// 	APIKey string `yaml:"api_key" env: "OM_API_KEY"envDefault: ""`
-// }
 
 type DatabaseConfig struct {
 	// ClickHouse ClickHouseConfig `yaml:"clickhouse"`
@@ -89,6 +83,14 @@ type FileCopyConfig struct {
 	AlertTimeWindowSeconds  int  `yaml:"alert_time_window_seconds"`
 }
 
+type LoggingConfig struct {
+	Level      string `yaml:"level"`
+	File       string `yaml:"file"`
+	MaxSize    int    `yaml:"max_size_mb"`
+	MaxBackups int    `yaml:"max_backups"`
+	MaxAgeDays int    `yaml:"max_age_days"`
+}
+
 func Load(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -107,6 +109,12 @@ func Load(configPath string) (*Config, error) {
 	}
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 5000
+	}
+	if cfg.Logging.Level == "" {
+		cfg.Logging.Level = "info"
+	}
+	if cfg.Logging.File == "" {
+		cfg.Logging.File = "/app/logs/server.log"
 	}
 
 	return &cfg, nil
