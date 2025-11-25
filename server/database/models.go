@@ -203,9 +203,9 @@ type DashboardStats struct {
         CriticalAlerts    int     `json:"critical_alerts"`
         TotalScreenshots  int     `json:"total_screenshots"`
         AverageActivity   float64 `json:"average_activity"`
-        TotalEmployees    int     `json:"total_employees"`
-        ActiveNow         int     `json:"active_now"`
-        Offline           int     `json:"offline"`
+        TotalEmployees    uint64  `json:"total_employees"`
+        ActiveNow         uint64  `json:"active_now"`
+        Offline           uint64  `json:"offline"`
         UnresolvedAlerts  int     `json:"unresolved_alerts"`
         TodayScreenshots  int     `json:"today_screenshots"`
         TodayUSBEvents    int     `json:"today_usb_events"`

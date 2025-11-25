@@ -276,23 +276,27 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
         // Total employees (unique usernames in last 7 days)
         err := db.conn.QueryRow(ctx, `
                 SELECT count(DISTINCT username) 
-                FROM monitoring.activity_events 
-                WHERE timestamp > ?`, weekAgo).Scan(&stats.TotalEmployees)
+                FROM monitoring.activity_segments 
+                WHERE timestamp_start > ?`, weekAgo).Scan(&stats.TotalEmployees)
         if err != nil {
                 zapctx.Warn(ctx, "Failed to get total employees", zap.Error(err))
         }
 
-        // Active now (last 5 minutes)
+        // Active now (last 5 minutes, state = active)
         err = db.conn.QueryRow(ctx, `
                 SELECT count(DISTINCT username) 
-                FROM monitoring.activity_events 
-                WHERE timestamp > ?`, fiveMinAgo).Scan(&stats.ActiveNow)
+                FROM monitoring.activity_segments 
+                WHERE timestamp_start > ? AND state = 'active'`, fiveMinAgo).Scan(&stats.ActiveNow)
         if err != nil {
                 zapctx.Warn(ctx, "Failed to get active now", zap.Error(err))
         }
 
         // Offline (total - active)
-        stats.Offline = stats.TotalEmployees - stats.ActiveNow
+        if stats.TotalEmployees > stats.ActiveNow {
+                stats.Offline = stats.TotalEmployees - stats.ActiveNow
+        } else {
+                stats.Offline = 0
+        }
 
         // Start of today
         todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
