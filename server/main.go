@@ -36,8 +36,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	// Initialize logger
-	fmt.Println(cfg)
-	logger, err := initLogger(&cfg.Logging)
+	logger, err := initLogger(cfg.Logging)
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
@@ -177,11 +176,7 @@ func main() {
 	}
 }
 
-func initLogger(cfg *config.LoggingConfig) (*zap.Logger, error) {
-	fmt.Println("Start init logger")
-	fmt.Println(cfg)
-	fmt.Println("--------------------------")
-	fmt.Println(&cfg)
+func initLogger(cfg config.LoggingConfig) (*zap.Logger, error) {
 	var loglevel zapcore.Level
 	switch cfg.Level {
 	case "debug":
