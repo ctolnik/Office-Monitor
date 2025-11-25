@@ -11,6 +11,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Storage  StorageConfig  `yaml:"storage"`
+	Logging  LoggingConfig  `yaml:"logging"`
 	// Monitoring MonitoringConfig `yaml:"monitoring"`
 }
 
@@ -20,13 +21,6 @@ type ServerConfig struct {
 	Mode   string `yaml:"mode"`
 	APIKey string `yaml:"api_key"`
 }
-
-// type ServerConfig struct {
-// 	Host   string `yaml:"host" env: "OM_HOST" envDefault: "0.0.0.0"`
-// 	Port   int    `yaml:"port" env: "OM_PORT" envDefault:"5000"`
-// 	Mode   string `yaml:"mode" env: "OM_MODE" envDefault: "prod"`
-// 	APIKey string `yaml:"api_key" env: "OM_API_KEY"envDefault: ""`
-// }
 
 type DatabaseConfig struct {
 	// ClickHouse ClickHouseConfig `yaml:"clickhouse"`
@@ -87,6 +81,14 @@ type FileCopyConfig struct {
 	LargeCopyThresholdMB    int  `yaml:"large_copy_threshold_mb"`
 	AlertFileCountThreshold int  `yaml:"alert_file_count_threshold"`
 	AlertTimeWindowSeconds  int  `yaml:"alert_time_window_seconds"`
+}
+
+type LoggingConfig struct {
+	Level      string `yaml:"info"`
+	File       string `yaml:"/app/logs/server.log"`
+	MaxSize    int    `yaml:"100"`
+	MaxBackups int    `yaml:"10"`
+	MaxAgeDays int    `yaml:"30"`
 }
 
 func Load(configPath string) (*Config, error) {
