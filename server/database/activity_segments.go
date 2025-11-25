@@ -69,9 +69,16 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
                 return nil, err
         }
 
+        // Count segments by state for debugging
+        stateCount := make(map[string]int)
+        for _, seg := range segments {
+                stateCount[seg.State]++
+        }
+
         zap.L().Info("GetActivitySegmentsByUsername result",
                 zap.String("username", username),
-                zap.Int("segments_count", len(segments)))
+                zap.Int("segments_count", len(segments)),
+                zap.Any("states", stateCount))
 
         return segments, nil
 }
@@ -91,7 +98,6 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 WHERE username = ? 
                   AND timestamp_start >= toDateTime64('%s', 3)
                   AND timestamp_start < toDateTime64('%s', 3)
-                  AND state = 'active'
                 GROUP BY process_name, window_title
                 ORDER BY total_duration DESC
                 LIMIT 50`, startStr, endStr)
@@ -99,7 +105,8 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
         zap.L().Info("GetApplicationUsageFromSegments",
                 zap.String("username", username),
                 zap.String("start", startStr),
-                zap.String("end", endStr))
+                zap.String("end", endStr),
+                zap.String("query", query))
 
         rows, err := db.conn.Query(ctx, query, username)
         if err != nil {
