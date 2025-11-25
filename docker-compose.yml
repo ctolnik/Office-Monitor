@@ -10,7 +10,9 @@ services:
       - "9000:9000"  # Native protocol
     volumes:
       - clickhouse_data:/var/lib/clickhouse
-      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./clickhouse/migrations.sql:/docker-entrypoint-initdb.d/02-migrations.sql
+      - ./clickhouse/add_application_categories_table.sql:/docker-entrypoint-initdb.d/03-categories.sql
     environment:
       TZ: Europe/Moscow
       CLICKHOUSE_DB: monitoring
