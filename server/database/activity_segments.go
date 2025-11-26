@@ -116,6 +116,13 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
         }
         defer rows.Close()
 
+        // Load application categories once for matching
+        categories, err := db.GetApplicationCategories(ctx, "", "", true)
+        if err != nil {
+                zapctx.Warn(ctx, "Failed to load application categories, using default 'neutral'", zap.Error(err))
+                categories = []ApplicationCategory{}
+        }
+
         apps := make([]ApplicationUsage, 0)
         for rows.Next() {
                 var app ApplicationUsage
@@ -130,7 +137,9 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 app.Duration = totalDuration
                 app.TotalDuration = totalDuration
                 app.Count = int(count)
-                app.Category = "neutral" // TODO: get from categories table
+                
+                // Match process to category
+                app.Category = matchProcessToCategoryInternal(app.ProcessName, categories)
                 
                 apps = append(apps, app)
         }
