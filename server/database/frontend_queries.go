@@ -889,13 +889,24 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
                 report.DLPAlerts = alerts
         }
 
-        // Calculate activity summary
-        var totalDuration uint64
+        // Calculate activity summary from segments (by state)
+        var totalActiveTime, totalIdleTime, totalOfflineTime uint64
         var productiveTime, unproductiveTime, neutralTime uint64
 
-        // Calculate time by category
+        // Calculate time by state from segments
+        for _, seg := range activitySegments {
+                switch seg.State {
+                case "active":
+                        totalActiveTime += uint64(seg.DurationSec)
+                case "idle":
+                        totalIdleTime += uint64(seg.DurationSec)
+                case "offline":
+                        totalOfflineTime += uint64(seg.DurationSec)
+                }
+        }
+
+        // Calculate time by category from applications
         for _, app := range report.Applications {
-                totalDuration += app.Duration
                 switch app.Category {
                 case "productive":
                         productiveTime += app.Duration
@@ -909,8 +920,8 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
         // Calculate productivity score: (productive - unproductive) / total * 100
         // Range: 0-100, where 50 is neutral
         var productivityScore float64
-        if totalDuration > 0 {
-                productivityScore = (float64(productiveTime) / float64(totalDuration)) * 100
+        if totalActiveTime > 0 {
+                productivityScore = (float64(productiveTime) / float64(totalActiveTime)) * 100
         } else {
                 productivityScore = 0.0
         }
@@ -921,7 +932,10 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
                 zap.Int("applications_count", len(report.Applications)),
                 zap.Int("screenshots_count", len(report.Screenshots)),
                 zap.Int("usb_events_count", len(report.USBEvents)),
-                zap.Int("file_events_count", len(report.FileEvents)))
+                zap.Int("file_events_count", len(report.FileEvents)),
+                zap.Uint64("total_active_time", totalActiveTime),
+                zap.Uint64("total_idle_time", totalIdleTime),
+                zap.Uint64("total_offline_time", totalOfflineTime))
 
         // Get actual first and last activity timestamps
         firstActivity := startOfDay.Format(time.RFC3339)
@@ -935,8 +949,8 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
                 Username:          username,
                 StartDate:         startOfDay.Format(time.RFC3339),
                 EndDate:           endOfDay.Format(time.RFC3339),
-                TotalActiveTime:   totalDuration,
-                TotalIdleTime:     0,
+                TotalActiveTime:   totalActiveTime,
+                TotalIdleTime:     totalIdleTime,
                 ProductiveTime:    productiveTime,
                 UnproductiveTime:  unproductiveTime,
                 NeutralTime:       neutralTime,
