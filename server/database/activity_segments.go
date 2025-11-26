@@ -119,16 +119,16 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
         apps := make([]ApplicationUsage, 0)
         for rows.Next() {
                 var app ApplicationUsage
-                var totalDuration uint32
-                var count uint32
+                var totalDuration uint64
+                var count uint64
                 
                 if err := rows.Scan(&app.ProcessName, &app.WindowTitle, &totalDuration, &count); err != nil {
                         zapctx.Error(ctx, "Failed to scan application usage row", zap.Error(err))
                         continue
                 }
                 
-                app.Duration = uint64(totalDuration)
-                app.TotalDuration = uint64(totalDuration)
+                app.Duration = totalDuration
+                app.TotalDuration = totalDuration
                 app.Count = int(count)
                 app.Category = "neutral" // TODO: get from categories table
                 
