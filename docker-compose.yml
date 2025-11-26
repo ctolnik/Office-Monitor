@@ -13,6 +13,8 @@ services:
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./clickhouse/migrations.sql:/docker-entrypoint-initdb.d/02-migrations.sql
       - ./clickhouse/add_application_categories_table.sql:/docker-entrypoint-initdb.d/03-categories.sql
+      - ./clickhouse/add_activity_segments.sql:/docker-entrypoint-initdb.d/04-categories.sqladd_activity_segments
+      - ./clickhouse/migration_add_activity_fields.sql:/docker-entrypoint-initdb.d/05-categories.sqladd_activity_segments
     environment:
       TZ: Europe/Moscow
       CLICKHOUSE_DB: monitoring
