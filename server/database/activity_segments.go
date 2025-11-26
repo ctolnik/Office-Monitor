@@ -5,6 +5,7 @@ import (
         "fmt"
         "time"
 
+        "github.com/ctolnik/Office-Monitor/zapctx"
         "go.uber.org/zap"
 )
 
@@ -31,7 +32,7 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
                 ORDER BY timestamp_start ASC
                 LIMIT 10000`, startStr, endStr)
 
-        zap.L().Info("GetActivitySegmentsByUsername",
+        zapctx.Info(ctx, "GetActivitySegmentsByUsername",
                 zap.String("username", username),
                 zap.String("start", startStr),
                 zap.String("end", endStr),
@@ -39,7 +40,7 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
 
         rows, err := db.conn.Query(ctx, query, username)
         if err != nil {
-                zap.L().Error("Query failed", zap.Error(err), zap.String("query", query))
+                zapctx.Error(ctx, "Query failed", zap.Error(err), zap.String("query", query))
                 return nil, err
         }
         defer rows.Close()
@@ -58,14 +59,14 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
                         &s.WindowTitle,
                         &s.SessionID,
                 ); err != nil {
-                        zap.L().Error("Failed to scan activity segment row", zap.Error(err))
+                        zapctx.Error(ctx, "Failed to scan activity segment row", zap.Error(err))
                         continue
                 }
                 segments = append(segments, s)
         }
 
         if err := rows.Err(); err != nil {
-                zap.L().Error("Error iterating activity segment rows", zap.Error(err))
+                zapctx.Error(ctx, "Error iterating activity segment rows", zap.Error(err))
                 return nil, err
         }
 
@@ -75,7 +76,7 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
                 stateCount[seg.State]++
         }
 
-        zap.L().Info("GetActivitySegmentsByUsername result",
+        zapctx.Info(ctx, "GetActivitySegmentsByUsername result",
                 zap.String("username", username),
                 zap.Int("segments_count", len(segments)),
                 zap.Any("states", stateCount))
@@ -102,7 +103,7 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 ORDER BY total_duration DESC
                 LIMIT 50`, startStr, endStr)
 
-        zap.L().Info("GetApplicationUsageFromSegments",
+        zapctx.Info(ctx, "GetApplicationUsageFromSegments",
                 zap.String("username", username),
                 zap.String("start", startStr),
                 zap.String("end", endStr),
@@ -110,7 +111,7 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
 
         rows, err := db.conn.Query(ctx, query, username)
         if err != nil {
-                zap.L().Error("Query failed", zap.Error(err))
+                zapctx.Error(ctx, "Query failed", zap.Error(err))
                 return nil, err
         }
         defer rows.Close()
@@ -122,7 +123,7 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 var count uint32
                 
                 if err := rows.Scan(&app.ProcessName, &app.WindowTitle, &totalDuration, &count); err != nil {
-                        zap.L().Error("Failed to scan application usage row", zap.Error(err))
+                        zapctx.Error(ctx, "Failed to scan application usage row", zap.Error(err))
                         continue
                 }
                 
@@ -135,11 +136,11 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
         }
 
         if err := rows.Err(); err != nil {
-                zap.L().Error("Error iterating application usage rows", zap.Error(err))
+                zapctx.Error(ctx, "Error iterating application usage rows", zap.Error(err))
                 return nil, err
         }
 
-        zap.L().Info("GetApplicationUsageFromSegments result",
+        zapctx.Info(ctx, "GetApplicationUsageFromSegments result",
                 zap.String("username", username),
                 zap.Int("apps_count", len(apps)))
 
