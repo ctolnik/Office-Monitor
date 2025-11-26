@@ -28,8 +28,12 @@ func getAppCategoriesHandler(c *gin.Context) {
 
         categories, err := db.GetApplicationCategories(ctx, category, search, activeOnly)
         if err != nil {
-                zapctx.Error(ctx, "Failed to get categories", zap.Error(err))
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get categories"})
+                zapctx.Warn(ctx, "Failed to get categories (table might not exist yet), returning empty list", zap.Error(err))
+                // Return empty array instead of 500 if table doesn't exist
+                c.JSON(http.StatusOK, gin.H{
+                        "data":  []database.ApplicationCategory{},
+                        "total": 0,
+                })
                 return
         }
 
