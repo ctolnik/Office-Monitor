@@ -2,17 +2,8 @@
 -- Office Monitor - Seed Data
 -- ============================================================================
 -- This migration populates initial data for application categories
--- Safe to run multiple times (uses INSERT...ON CONFLICT DO NOTHING)
+-- Safe to run multiple times
 -- ============================================================================
-
-\echo '========================================='
-\echo 'Starting seed data migration...'
-\echo '========================================='
-
-\echo 'Populating application_categories table...'
-
--- Clear existing seed data (optional - comment out if you want to keep existing data)
--- DELETE FROM monitoring.application_categories WHERE created_by = 'system';
 
 INSERT INTO monitoring.application_categories 
 (process_name, process_pattern, category, created_by, updated_by, is_active) 
@@ -128,17 +119,4 @@ VALUES
 ('kodi.exe', 'kodi*', 'entertainment', 'system', 'system', 1),
 ('plex.exe', 'plex*', 'entertainment', 'system', 'system', 1);
 
-\echo '========================================='
-\echo 'Seed data migration completed!'
-\echo ''
-SELECT 'Total categories: ' || toString(count(*)) as result 
-FROM monitoring.application_categories;
-\echo ''
-SELECT 'By category:' as result;
-SELECT 
-    category,
-    count(*) as count
-FROM monitoring.application_categories 
-GROUP BY category 
-ORDER BY category;
-\echo '========================================='
+SELECT 'Migration completed! Total categories: ' || toString(count(*)) as result FROM monitoring.application_categories;

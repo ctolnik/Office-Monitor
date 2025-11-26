@@ -1,0 +1,28 @@
+ilya@docker-01:/opt/Office-Monitor$ docker ps
+CONTAINER ID   IMAGE                                      COMMAND                  CREATED          STATUS                    PORTS                                                                                                NAMES
+fadeef8d9662   nginx:alpine                               "/docker-entrypoint.…"   13 minutes ago   Up 13 minutes (healthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp                                                                  monitoring-nginx
+3581cf13aef9   office-monitor_frontend                    "/docker-entrypoint.…"   13 minutes ago   Up 13 minutes             80/tcp                                                                                               monitoring-frontend
+1e472d2ba76d   office-monitor_server                      "./monitoring-server"    13 minutes ago   Up 13 minutes             0.0.0.0:8081->8080/tcp, [::]:8081->8080/tcp                                                          monitoring-server
+d200b4343afa   clickhouse/clickhouse-server:25.9          "/entrypoint.sh"         13 minutes ago   Up 13 minutes (healthy)   0.0.0.0:8123->8123/tcp, [::]:8123->8123/tcp, 0.0.0.0:9000->9000/tcp, [::]:9000->9000/tcp, 9009/tcp   monitoring-clickhouse
+7ef6f388c202   minio/minio:RELEASE.2025-09-07T16-13-09Z   "/usr/bin/docker-ent…"   13 minutes ago   Up 13 minutes (healthy)   0.0.0.0:9002->9000/tcp, [::]:9002->9000/tcp, 0.0.0.0:9101->9001/tcp, [::]:9101->9001/tcp             monitoring-minio
+839a65577a2d   uibmz/opsi-server:4.3                      "/bin/sh -c /entrypo…"   4 days ago       Up 4 days                 0.0.0.0:69->69/udp, [::]:69->69/udp, 0.0.0.0:4447->4447/tcp, [::]:4447->4447/tcp                     opsi-server_opsi-server_1
+5da4c8253cb3   grafana/grafana:latest                     "/run.sh"                4 days ago       Up 4 days                 3000/tcp                                                                                             opsi-server_grafana_1
+bc6934978472   mariadb:10.7                               "docker-entrypoint.s…"   4 days ago       Up 4 days                 3306/tcp                                                                                             opsi-server_mysql_1
+e4ea36011be4   redis/redis-stack-server:latest            "sh -c 'redis-server…"   4 days ago       Up 4 days                 6379/tcp                                                                                             opsi-server_redis_1
+1908b65d9194   grafana/grafana:latest                     "/run.sh"                2 weeks ago      Up 2 weeks (healthy)      0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp                                                          grafana
+a0e5d14615a0   prom/prometheus:v3.7.0                     "/bin/prometheus --c…"   2 weeks ago      Up 3 days (healthy)       0.0.0.0:9090->9090/tcp, [::]:9090->9090/tcp                                                          prometheus
+dc3a2192aa98   pryorda/vmware_exporter:latest             "/usr/local/bin/vmwa…"   2 weeks ago      Up 2 weeks                0.0.0.0:9272->9272/tcp, [::]:9272->9272/tcp                                                          prometheus_stack_vmware_exporter_1
+f26bd2aa64e3   prom/pushgateway:latest                    "/bin/pushgateway"       2 weeks ago      Up 2 weeks (healthy)      0.0.0.0:9091->9091/tcp, [::]:9091->9091/tcp                                                          pushgateway
+f5242b3d369d   prom/blackbox-exporter:v0.27.0             "/bin/blackbox_expor…"   2 weeks ago      Up 2 weeks (healthy)      0.0.0.0:9115->9115/tcp, [::]:9115->9115/tcp                                                          blackbox
+471d17f38cec   prom/snmp-exporter:v0.29.0                 "/bin/snmp_exporter …"   2 weeks ago      Up 2 weeks (healthy)      0.0.0.0:9116->9116/tcp, [::]:9116->9116/tcp                                                          snmp-exporter
+4ef3ceb7dc0c   tg-bot-vpn_gsl-audit-bot                   "python -m src.bot_w…"   3 weeks ago      Up 3 weeks (healthy)      0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp                                                          gsl-audit-bot
+3b664415ef33   atlassian/jira-software:10.3.6             "/usr/bin/tini -- /e…"   3 weeks ago      Up 3 weeks                8080/tcp                                                                                             jira
+ae12504539df   postgres:15.13                             "docker-entrypoint.s…"   3 weeks ago      Up 3 weeks                0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp                                                          jira_db_1
+bd5e715cade5   nginx:alpine                               "/docker-entrypoint.…"   3 weeks ago      Up 3 weeks                80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp                                                      nginx
+ilya@docker-01:/opt/Office-Monitor$ cat clickhouse/01-schema.sql | docker exec -i d200b4343afa clickhouse-client --database monitoring
+ilya@docker-01:/opt/Office-Monitor$ cat clickhouse/02-seed-data.sql | docker exec -i d200b4343afa clickhouse-client --database monitoring
+ilya@docker-01:/opt/Office-Monitor$ docker exec d200b4343afa clickhouse-client --database monitoring \
+  -q "SELECT count(*) FROM application_categories"
+Received exception from server (version 25.9.5):
+Code: 60. DB::Exception: Received from localhost:9000. DB::Exception: Unknown table expression identifier 'application_categories' in scope SELECT count(*) FROM application_categories. (UNKNOWN_TABLE)
+(query: SELECT count(*) FROM application_categories)

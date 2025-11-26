@@ -5,15 +5,10 @@
 -- Safe to run multiple times (idempotent)
 -- ============================================================================
 
-\echo '========================================='
-\echo 'Starting schema migration...'
-\echo '========================================='
-
 -- ============================================================================
 -- 1. Core Activity Tables
 -- ============================================================================
 
-\echo 'Creating activity_events table...'
 CREATE TABLE IF NOT EXISTS monitoring.activity_events (
     timestamp DateTime64(3),
     computer_name String,
@@ -29,14 +24,12 @@ PARTITION BY toYYYYMM(event_date)
 ORDER BY (computer_name, username, timestamp)
 TTL event_date + INTERVAL 180 DAY;
 
--- Add columns if they don't exist (for existing installations)
 ALTER TABLE monitoring.activity_events 
 ADD COLUMN IF NOT EXISTS process_path String DEFAULT '' AFTER process_name;
 
 ALTER TABLE monitoring.activity_events 
 ADD COLUMN IF NOT EXISTS idle_time UInt32 DEFAULT 0 AFTER duration;
 
-\echo 'Creating activity_segments table...'
 CREATE TABLE IF NOT EXISTS monitoring.activity_segments (
     timestamp_start DateTime64(3),
     timestamp_end DateTime64(3),
@@ -53,7 +46,6 @@ PARTITION BY toYYYYMM(event_date)
 ORDER BY (computer_name, username, timestamp_start)
 TTL event_date + INTERVAL 180 DAY;
 
-\echo 'Creating keyboard_events table...'
 CREATE TABLE IF NOT EXISTS monitoring.keyboard_events (
     timestamp DateTime64(3),
     computer_name String,
@@ -68,11 +60,9 @@ PARTITION BY toYYYYMM(event_date)
 ORDER BY (computer_name, username, timestamp)
 TTL event_date + INTERVAL 180 DAY;
 
--- Add column if doesn't exist
 ALTER TABLE monitoring.keyboard_events 
 ADD COLUMN IF NOT EXISTS context_info String DEFAULT '';
 
-\echo 'Creating file_copy_events table...'
 CREATE TABLE IF NOT EXISTS monitoring.file_copy_events (
     timestamp DateTime64(3),
     computer_name String,
@@ -89,7 +79,6 @@ PARTITION BY toYYYYMM(event_date)
 ORDER BY (computer_name, username, timestamp)
 TTL event_date + INTERVAL 180 DAY;
 
-\echo 'Creating usb_events table...'
 CREATE TABLE IF NOT EXISTS monitoring.usb_events (
     timestamp DateTime64(3),
     computer_name String,
@@ -105,7 +94,6 @@ PARTITION BY toYYYYMM(event_date)
 ORDER BY (computer_name, username, timestamp)
 TTL event_date + INTERVAL 180 DAY;
 
-\echo 'Creating screenshot_metadata table...'
 CREATE TABLE IF NOT EXISTS monitoring.screenshot_metadata (
     timestamp DateTime64(3),
     computer_name String,
@@ -121,7 +109,6 @@ PARTITION BY toYYYYMM(event_date)
 ORDER BY (computer_name, username, timestamp)
 TTL event_date + INTERVAL 180 DAY;
 
-\echo 'Creating alerts table...'
 CREATE TABLE IF NOT EXISTS monitoring.alerts (
     timestamp DateTime64(3),
     computer_name String,
@@ -141,7 +128,6 @@ TTL event_date + INTERVAL 180 DAY;
 -- 2. Configuration Tables
 -- ============================================================================
 
-\echo 'Creating agent_configs table...'
 CREATE TABLE IF NOT EXISTS monitoring.agent_configs (
     computer_name String,
     api_key String,
@@ -157,7 +143,6 @@ CREATE TABLE IF NOT EXISTS monitoring.agent_configs (
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY computer_name;
 
-\echo 'Creating employees table...'
 CREATE TABLE IF NOT EXISTS monitoring.employees (
     username String,
     full_name String,
@@ -170,7 +155,6 @@ CREATE TABLE IF NOT EXISTS monitoring.employees (
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY username;
 
-\echo 'Creating process_catalog table...'
 CREATE TABLE IF NOT EXISTS monitoring.process_catalog (
     id String,
     friendly_name String,
@@ -183,7 +167,6 @@ CREATE TABLE IF NOT EXISTS monitoring.process_catalog (
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY id;
 
-\echo 'Creating application_categories table...'
 CREATE TABLE IF NOT EXISTS monitoring.application_categories (
     id UUID DEFAULT generateUUIDv4(),
     process_name String,
@@ -204,7 +187,6 @@ CREATE TABLE IF NOT EXISTS monitoring.application_categories (
 ORDER BY (process_name, id)
 SETTINGS index_granularity = 8192;
 
-\echo 'Creating system_settings table...'
 CREATE TABLE IF NOT EXISTS monitoring.system_settings (
     key String,
     value String,
@@ -225,7 +207,6 @@ SETTINGS index_granularity = 8192;
 -- 3. Materialized Views
 -- ============================================================================
 
-\echo 'Creating activity_stats_hourly view...'
 CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring.activity_stats_hourly
 ENGINE = SummingMergeTree()
 PARTITION BY toYYYYMM(event_date)
@@ -241,7 +222,6 @@ AS SELECT
 FROM monitoring.activity_events
 GROUP BY computer_name, username, event_date, hour, process_name;
 
-\echo 'Creating daily_activity_summary view...'
 CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring.daily_activity_summary
 ENGINE = SummingMergeTree()
 PARTITION BY toYYYYMM(event_date)
@@ -256,7 +236,6 @@ AS SELECT
 FROM monitoring.activity_segments
 GROUP BY computer_name, username, event_date, state;
 
-\echo 'Creating program_usage_daily view...'
 CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring.program_usage_daily
 ENGINE = SummingMergeTree()
 PARTITION BY toYYYYMM(event_date)
@@ -277,16 +256,12 @@ GROUP BY computer_name, username, event_date, process_name, state;
 -- 4. Indexes
 -- ============================================================================
 
-\echo 'Creating indexes...'
-
--- application_categories indexes
 ALTER TABLE monitoring.application_categories 
 ADD INDEX IF NOT EXISTS idx_category category TYPE set(0) GRANULARITY 4;
 
 ALTER TABLE monitoring.application_categories 
 ADD INDEX IF NOT EXISTS idx_is_active is_active TYPE set(0) GRANULARITY 4;
 
--- Performance indexes for event tables
 ALTER TABLE monitoring.activity_events 
 ADD INDEX IF NOT EXISTS idx_username_timestamp (username, timestamp) TYPE minmax GRANULARITY 4;
 
@@ -301,7 +276,3 @@ ADD INDEX IF NOT EXISTS idx_username_timestamp (username, timestamp) TYPE minmax
 
 ALTER TABLE monitoring.file_copy_events 
 ADD INDEX IF NOT EXISTS idx_username_timestamp (username, timestamp) TYPE minmax GRANULARITY 4;
-
-\echo '========================================='
-\echo 'Schema migration completed successfully!'
-\echo '========================================='
