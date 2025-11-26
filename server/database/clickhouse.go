@@ -15,7 +15,7 @@ type Database struct {
         conn driver.Conn
 }
 
-func New(host string, port int, database, username, password string) (*Database, error) {
+func New(host string, port int, database, username, password string, logger *zap.Logger) (*Database, error) {
         conn, err := clickhouse.Open(&clickhouse.Options{
                 Addr: []string{fmt.Sprintf("%s:%d", host, port)},
                 Auth: clickhouse.Auth{
@@ -39,16 +39,18 @@ func New(host string, port int, database, username, password string) (*Database,
         db := &Database{conn: conn}
 
         // Auto-sync schema on startup (creates table if missing)
-        ctx := context.Background()
-        if err := db.AutoSyncApplicationCategoriesTable(ctx); err != nil {
-                zapctx.Warn(ctx, "Failed to auto-sync application_categories table", zap.Error(err))
-                // Don't fail startup - table might be created by migrations
-        }
+        if logger != nil {
+                ctx := zapctx.WithLogger(context.Background(), logger)
+                if err := db.AutoSyncApplicationCategoriesTable(ctx); err != nil {
+                        logger.Warn("Failed to auto-sync application_categories table", zap.Error(err))
+                        // Don't fail startup - table might be created by migrations
+                }
 
-        // Auto-load default categories if table is empty
-        if err := db.AutoLoadDefaultCategories(ctx); err != nil {
-                zapctx.Warn(ctx, "Failed to auto-load default categories", zap.Error(err))
-                // Don't fail startup - user can add categories manually
+                // Auto-load default categories if table is empty
+                if err := db.AutoLoadDefaultCategories(ctx); err != nil {
+                        logger.Warn("Failed to auto-load default categories", zap.Error(err))
+                        // Don't fail startup - user can add categories manually
+                }
         }
 
         return db, nil
