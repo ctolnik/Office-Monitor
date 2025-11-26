@@ -7,6 +7,8 @@ import (
 
         "github.com/ClickHouse/clickhouse-go/v2"
         "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+        "github.com/ctolnik/Office-Monitor/zapctx"
+        "go.uber.org/zap"
 )
 
 type Database struct {
@@ -345,9 +347,17 @@ func (db *Database) CreateProcessCatalogEntry(ctx context.Context, entry Process
                 (id, friendly_name, process_names, window_title_patterns, category, is_active, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
-        return db.conn.Exec(ctx, query,
+        err := db.conn.Exec(ctx, query,
                 entry.ID, entry.FriendlyName, entry.ProcessNames, entry.WindowTitlePatterns,
                 entry.Category, entry.IsActive, entry.CreatedAt, entry.UpdatedAt)
+        
+        if err != nil {
+                zapctx.Error(ctx, "Failed to create process catalog entry", zap.Error(err), zap.String("friendly_name", entry.FriendlyName))
+                return err
+        }
+        
+        zapctx.Info(ctx, "Process catalog entry created", zap.String("id", entry.ID), zap.String("friendly_name", entry.FriendlyName))
+        return nil
 }
 
 func (db *Database) UpdateProcessCatalogEntry(ctx context.Context, entry ProcessCatalogEntry) error {
@@ -373,6 +383,7 @@ func (db *Database) GetProcessCatalog(ctx context.Context) ([]ProcessCatalogEntr
 
         rows, err := db.conn.Query(ctx, query)
         if err != nil {
+                zapctx.Error(ctx, "Failed to query process catalog", zap.Error(err))
                 return nil, err
         }
         defer rows.Close()
@@ -384,13 +395,20 @@ func (db *Database) GetProcessCatalog(ctx context.Context) ([]ProcessCatalogEntr
                 if err := rows.Scan(&entry.ID, &entry.FriendlyName, &entry.ProcessNames,
                         &entry.WindowTitlePatterns, &entry.Category, &isActive,
                         &entry.CreatedAt, &entry.UpdatedAt); err != nil {
+                        zapctx.Warn(ctx, "Failed to scan process catalog row", zap.Error(err))
                         continue
                 }
                 entry.IsActive = isActive == 1
                 entries = append(entries, entry)
         }
 
-        return entries, rows.Err()
+        if err := rows.Err(); err != nil {
+                zapctx.Error(ctx, "Error iterating process catalog rows", zap.Error(err))
+                return nil, err
+        }
+
+        zapctx.Debug(ctx, "Process catalog fetched", zap.Int("count", len(entries)))
+        return entries, nil
 }
 
 func (db *Database) DeleteProcessCatalogEntry(ctx context.Context, id string) error {
