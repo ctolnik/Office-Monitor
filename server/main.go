@@ -1,6 +1,7 @@
 package main
 
 import (
+        "context"
         "encoding/json"
         "fmt"
         "log"
@@ -10,6 +11,7 @@ import (
         "github.com/ctolnik/Office-Monitor/server/config"
         "github.com/ctolnik/Office-Monitor/server/database"
         "github.com/ctolnik/Office-Monitor/server/storage"
+        "github.com/ctolnik/Office-Monitor/zapctx"
 
         "github.com/gin-gonic/gin"
         "go.uber.org/zap"
@@ -54,13 +56,16 @@ func main() {
         // Initialize cache with 30 second TTL
         dashCache = NewDashboardCache(30 * time.Second)
 
+        // Create context with logger for database initialization
+        ctx := zapctx.WithLogger(context.Background(), logger)
+
         db, err = database.New(
+                ctx,
                 cfg.Database.Host,
                 cfg.Database.Port,
                 cfg.Database.Database,
                 cfg.Database.Username,
                 cfg.Database.Password,
-                logger,
         )
         if err != nil {
                 log.Fatalf("Failed to connect to database: %v", err)
