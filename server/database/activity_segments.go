@@ -134,6 +134,11 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                         continue
                 }
                 
+                // Skip "unknown" processes (system/protected processes that agent can't monitor)
+                if app.ProcessName == "unknown" || app.ProcessName == "" {
+                        continue
+                }
+                
                 app.Duration = totalDuration
                 app.TotalDuration = totalDuration
                 app.Count = int(count)
