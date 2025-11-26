@@ -379,58 +379,17 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 }
 
 // categorizeApplication determines app category based on process name and window title
-func categorizeApplication(processName, windowTitle string) string {
+// Now uses database table application_categories with fallback to hardcoded rules
+func (db *Database) categorizeApplication(ctx context.Context, processName, windowTitle string) string {
+        // Try to get category from database table first
+        category, err := db.MatchProcessToCategory(ctx, processName, windowTitle)
+        if err == nil && category != "neutral" {
+                return category
+        }
+
+        // Fallback to browser URL detection (still useful for context)
         processLower := strings.ToLower(processName)
         titleLower := strings.ToLower(windowTitle)
-
-        // Productive applications
-        productive := []string{
-                "code.exe", "idea", "pycharm", "goland", "webstorm", "rider", "clion",
-                "visualstudio.exe", "devenv.exe",
-                "notepad++.exe", "sublime", "atom.exe", "vim", "nano",
-                "datagrip", "dbeaver", "mysql", "postgres", "ssms.exe",
-                "docker", "postman", "insomnia",
-                "git", "fork.exe", "gitkraken",
-                "terminal", "cmd.exe", "powershell.exe", "bash", "mobaxterm.exe", "putty.exe",
-                "1cv8c.exe", "1cv8.exe", // 1C Development
-                "excel.exe", "winword.exe", "powerpnt.exe", // Office work
-                "notion", "obsidian", "onenote",
-        }
-
-        // Communication apps
-        communication := []string{
-                "slack.exe", "teams.exe", "zoom.exe", "skype.exe",
-                "discord.exe", "telegram.exe", "whatsapp.exe",
-                "outlook.exe", "thunderbird.exe",
-        }
-
-        // Unproductive / Entertainment
-        unproductive := []string{
-                "steam.exe", "epicgameslauncher.exe", "origin.exe",
-                "spotify.exe", "vlc.exe",
-                "netflix", "twitch",
-        }
-
-        // Check productive
-        for _, app := range productive {
-                if strings.Contains(processLower, app) {
-                        return "productive"
-                }
-        }
-
-        // Check communication
-        for _, app := range communication {
-                if strings.Contains(processLower, app) {
-                        return "communication"
-                }
-        }
-
-        // Check unproductive
-        for _, app := range unproductive {
-                if strings.Contains(processLower, app) {
-                        return "unproductive"
-                }
-        }
 
         // Chrome/Firefox special handling - categorize by site
         if strings.Contains(processLower, "chrome.exe") || strings.Contains(processLower, "firefox.exe") || strings.Contains(processLower, "msedge.exe") {
@@ -451,13 +410,8 @@ func categorizeApplication(processName, windowTitle string) string {
                 }
         }
 
-        // System processes
-        if strings.Contains(processLower, "explorer.exe") || strings.Contains(processLower, "taskmgr.exe") ||
-                strings.Contains(processLower, "system") {
-                return "system"
-        }
-
-        return "neutral"
+        // If we got here and database returned neutral, use that
+        return category
 }
 
 // GetApplicationUsage returns application usage statistics
@@ -507,7 +461,7 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
                         zapctx.Error(ctx, "Failed to scan row", zap.Error(err))
                         continue
                 }
-                app.Category = categorizeApplication(app.ProcessName, app.WindowTitle)
+                app.Category = db.categorizeApplication(ctx, app.ProcessName, app.WindowTitle)
                 totalDuration += app.Duration
                 tempApps = append(tempApps, app)
         }
