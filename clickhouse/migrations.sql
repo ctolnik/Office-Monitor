@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS monitoring.application_categories (
         'unproductive' = 2, 
         'neutral' = 3, 
         'communication' = 4, 
-        'system' = 5
+        'entertainment' = 5
     ),
     created_at DateTime DEFAULT now(),
     updated_at DateTime DEFAULT now(),
