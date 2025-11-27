@@ -1,0 +1,46 @@
+monitoring-nginx | 2025/11/28 00:53:29 [notice] 1#1: start worker process 67
+monitoring-nginx | 2025/11/28 00:53:29 [notice] 1#1: start worker process 68
+monitoring-minio-init | Added `myminio` successfully.
+monitoring-minio-init | Bucket created successfully `myminio/screenshots`.
+monitoring-minio-init | Bucket created successfully `myminio/usb-copies`.
+monitoring-minio-init | mc: Please use 'mc anonymous'
+monitoring-minio-init | Lifecycle configuration rule added with ID `d4kcgm1hdvbc7htejei0` to myminio/screenshots.
+monitoring-minio-init | MinIO buckets created successfully
+monitoring-server | {"ts":"2025-11-28T00:53:29.202+0300","msg":"Log level","level":"debug"}
+monitoring-server | {"ts":"2025-11-28T00:53:29.203+0300","msg":"🔄 Auto-syncing application_categories table schema..."}
+monitoring-server | {"ts":"2025-11-28T00:53:29.210+0300","msg":"✅ application_categories table schema is up to date"}
+monitoring-server | {"ts":"2025-11-28T00:53:29.211+0300","msg":"🔄 Auto-syncing process_catalog table schema..."}
+monitoring-server | {"ts":"2025-11-28T00:53:29.211+0300","msg":"✅ process_catalog table schema is up to date"}
+monitoring-server | {"ts":"2025-11-28T00:53:29.213+0300","msg":"✅ Application categories already loaded","count":10}
+monitoring-server | 2025/11/28 00:53:29 Server starting on 0.0.0.0:8080
+monitoring-minio-init exited with code 0
+monitoring-server | 2025/11/28 00:54:42 Creating process catalog entry: friendly_name=Google Chrome, process_names=[chrome.exe], category=other
+monitoring-server | 2025/11/28 00:54:42 Invalid category 'other', defaulting to 'neutral'
+monitoring-server | {"ts":"2025-11-28T00:54:42.367+0300","msg":"Failed to create process catalog entry","error":"code: 691, message: Unknown element 'neutral' for enum: while executing 'FUNCTION if(isNull(-dummy-0) : 3, defaultValueOfTypeName('Enum8(\\'work\\' = 1, \\'communication\\' = 2, \\'development\\' = 3, \\'browsing\\'... :: 2, _CAST(-dummy-0, 'Enum8(\\'work\\' = 1, \\'communication\\' = 2, \\'development\\' = 3, \\'browsing\\' = 4, \\... :: 4) -> if(isNull(-dummy-0), defaultValueOfTypeName('Enum8(\\'work\\' = 1, \\'communication\\' = 2, \\'developmen... Enum8('work' = 1, 'communication' = 2, 'development' = 3, 'browsing' = 4, 'other' = 5) : 1': While executing ValuesBlockInputFormat","friendly_name":"Google Chrome"}
+monitoring-server | 2025/11/28 00:54:42 Failed to create process catalog entry: code: 691, message: Unknown element 'neutral' for enum: while executing 'FUNCTION if(isNull(-dummy-0) : 3, defaultValueOfTypeName('Enum8(\'work\' = 1, \'communication\' = 2, \'development\' = 3, \'browsing\'... :: 2, _CAST(-dummy-0, 'Enum8(\'work\' = 1, \'communication\' = 2, \'development\' = 3, \'browsing\' = 4, \... :: 4) -> if(isNull(-dummy-0), defaultValueOfTypeName('Enum8(\'work\' = 1, \'communication\' = 2, \'developmen... Enum8('work' = 1, 'communication' = 2, 'development' = 3, 'browsing' = 4, 'other' = 5) : 1': While executing ValuesBlockInputFormat (friendly_name=Google Chrome, category=neutral, process_names=[chrome.exe])
+monitoring-server | [GIN] 2025/11/28 - 00:54:42 | 500 |    7.248822ms |     172.16.0.10 | POST     "/api/process-catalog"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:42 +0300] "POST /api/process-catalog HTTP/1.1" 500 622 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-frontend | 172.18.0.6 - - [28/Nov/2025:00:54:45 +0300] "GET /settings HTTP/1.0" 200 1174 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "172.16.0.10"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:45 +0300] "GET /settings HTTP/1.1" 200 1174 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:45 +0300] "GET /assets/index-CjW5Xm5x.css HTTP/1.1" 200 67539 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-nginx | 2025/11/28 00:54:45 [warn] 28#28: *8 an upstream response is buffered to a temporary file /var/cache/nginx/proxy_temp/1/00/0000000001 while reading upstream, client: 172.16.0.10, server: localhost, request: "GET /assets/index-QOmA2f-Q.js HTTP/1.1", upstream: "http://172.18.0.5:80/assets/index-QOmA2f-Q.js", host: "monitor.net.gslaudit.ru", referrer: "http://monitor.net.gslaudit.ru/settings"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:45 +0300] "GET /assets/index-QOmA2f-Q.js HTTP/1.1" 200 2002026 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-server | {"ts":"2025-11-28T00:54:46.063+0300","msg":"Fetching application categories","category":"","search":"","active_only":true}
+monitoring-server | [GIN] 2025/11/28 - 00:54:46 | 200 |    4.380853ms |     172.16.0.10 | GET      "/api/alerts/unresolved"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:46 +0300] "GET /api/alerts/unresolved HTTP/1.1" 200 2 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-server | {"ts":"2025-11-28T00:54:46.068+0300","msg":"Application categories retrieved","count":10,"category_filter":"","search":""}
+monitoring-server | {"ts":"2025-11-28T00:54:46.068+0300","msg":"Application categories fetched","count":10}
+monitoring-server | [GIN] 2025/11/28 - 00:54:46 | 200 |    5.302492ms |     172.16.0.10 | GET      "/api/categories?search="
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:46 +0300] "GET /api/categories?search= HTTP/1.1" 200 2715 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:46 +0300] "GET /favicon.ico HTTP/1.1" 200 7645 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-server | {"ts":"2025-11-28T00:54:49.522+0300","msg":"Process catalog fetched","count":0}
+monitoring-server | [GIN] 2025/11/28 - 00:54:49 | 200 |    2.857254ms |     172.16.0.10 | GET      "/api/process-catalog"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:54:49 +0300] "GET /api/process-catalog HTTP/1.1" 200 2 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-server | 2025/11/28 00:55:03 Creating process catalog entry: friendly_name=Google Chrome, process_names=[chrome.exe], category=browsing
+monitoring-server | 2025/11/28 00:55:03 Invalid category 'browsing', defaulting to 'neutral'
+monitoring-server | {"ts":"2025-11-28T00:55:03.584+0300","msg":"Failed to create process catalog entry","error":"code: 691, message: Unknown element 'neutral' for enum: while executing 'FUNCTION if(isNull(-dummy-0) : 3, defaultValueOfTypeName('Enum8(\\'work\\' = 1, \\'communication\\' = 2, \\'development\\' = 3, \\'browsing\\'... :: 2, _CAST(-dummy-0, 'Enum8(\\'work\\' = 1, \\'communication\\' = 2, \\'development\\' = 3, \\'browsing\\' = 4, \\... :: 4) -> if(isNull(-dummy-0), defaultValueOfTypeName('Enum8(\\'work\\' = 1, \\'communication\\' = 2, \\'developmen... Enum8('work' = 1, 'communication' = 2, 'development' = 3, 'browsing' = 4, 'other' = 5) : 1': While executing ValuesBlockInputFormat","friendly_name":"Google Chrome"}
+monitoring-server | [GIN] 2025/11/28 - 00:55:03 | 500 |    3.896091ms |     172.16.0.10 | POST     "/api/process-catalog"
+monitoring-server | 2025/11/28 00:55:03 Failed to create process catalog entry: code: 691, message: Unknown element 'neutral' for enum: while executing 'FUNCTION if(isNull(-dummy-0) : 3, defaultValueOfTypeName('Enum8(\'work\' = 1, \'communication\' = 2, \'development\' = 3, \'browsing\'... :: 2, _CAST(-dummy-0, 'Enum8(\'work\' = 1, \'communication\' = 2, \'development\' = 3, \'browsing\' = 4, \... :: 4) -> if(isNull(-dummy-0), defaultValueOfTypeName('Enum8(\'work\' = 1, \'communication\' = 2, \'developmen... Enum8('work' = 1, 'communication' = 2, 'development' = 3, 'browsing' = 4, 'other' = 5) : 1': While executing ValuesBlockInputFormat (friendly_name=Google Chrome, category=neutral, process_names=[chrome.exe])
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:55:03 +0300] "POST /api/process-catalog HTTP/1.1" 500 622 "http://monitor.net.gslaudit.ru/settings" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+monitoring-server | [GIN] 2025/11/28 - 00:55:07 | 200 |    9.670614ms |     172.16.0.10 | POST     "/api/activity/segment"
+monitoring-nginx | 172.16.0.10 - - [28/Nov/2025:00:55:07 +0300] "POST /api/activity/segment HTTP/1.1" 200 20 "-" "Go-http-client/1.1" "-"
