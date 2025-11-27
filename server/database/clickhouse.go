@@ -457,11 +457,13 @@ func (db *Database) Close() error {
         return db.conn.Close()
 }
 
-// GetUniqueUsernames returns list of unique usernames from activity events
+// GetUniqueUsernames returns list of unique usernames from activity segments
 func (db *Database) GetUniqueUsernames(ctx context.Context) ([]string, error) {
+        // Use activity_segments as primary source (more up-to-date)
+        // Fall back to activity_events if needed
         query := `SELECT DISTINCT username 
-                  FROM monitoring.activity_events 
-                  WHERE timestamp > now() - INTERVAL 7 DAY
+                  FROM monitoring.activity_segments 
+                  WHERE timestamp_start > now() - INTERVAL 7 DAY
                   ORDER BY username`
         
         rows, err := db.conn.Query(ctx, query)
@@ -477,6 +479,28 @@ func (db *Database) GetUniqueUsernames(ctx context.Context) ([]string, error) {
                         continue
                 }
                 users = append(users, username)
+        }
+        
+        // If no users found in segments, try activity_events as fallback
+        if len(users) == 0 {
+                fallbackQuery := `SELECT DISTINCT username 
+                          FROM monitoring.activity_events 
+                          WHERE timestamp > now() - INTERVAL 7 DAY
+                          ORDER BY username`
+                
+                fallbackRows, err := db.conn.Query(ctx, fallbackQuery)
+                if err != nil {
+                        return users, nil // Return empty list, don't fail
+                }
+                defer fallbackRows.Close()
+                
+                for fallbackRows.Next() {
+                        var username string
+                        if err := fallbackRows.Scan(&username); err != nil {
+                                continue
+                        }
+                        users = append(users, username)
+                }
         }
         
         return users, rows.Err()
