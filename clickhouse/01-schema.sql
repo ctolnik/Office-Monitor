@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS monitoring.employees (
 ORDER BY username;
 
 CREATE TABLE IF NOT EXISTS monitoring.process_catalog (
-    id String,
+    id UUID DEFAULT generateUUIDv4(),
     friendly_name String,
     process_names Array(String),
     window_title_patterns Array(String),

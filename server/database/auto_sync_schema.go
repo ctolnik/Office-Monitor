@@ -114,12 +114,13 @@ VALUES
 
 // AutoSyncProcessCatalogTable creates the process_catalog table if it doesn't exist
 // This is used by /api/process-catalog endpoints
+// Note: Uses UUID type for id to match production schema
 func (db *Database) AutoSyncProcessCatalogTable(ctx context.Context) error {
         zapctx.Info(ctx, "🔄 Auto-syncing process_catalog table schema...")
 
         createTableSQL := `
 CREATE TABLE IF NOT EXISTS monitoring.process_catalog (
-    id String,
+    id UUID DEFAULT generateUUIDv4(),
     friendly_name String,
     process_names Array(String),
     window_title_patterns Array(String),

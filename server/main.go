@@ -680,7 +680,23 @@ func createProcessCatalogHandler(c *gin.Context) {
         log.Printf("Creating process catalog entry: friendly_name=%s, process_names=%v, category=%s",
                 entry.FriendlyName, entry.ProcessNames, entry.Category)
 
-        entry.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+        // Validate category - must be one of the allowed Enum values
+        validCategories := map[string]bool{
+                "productive": true, "unproductive": true, "neutral": true,
+                "communication": true, "entertainment": true,
+        }
+        if !validCategories[entry.Category] {
+                log.Printf("Invalid category '%s', defaulting to 'neutral'", entry.Category)
+                entry.Category = "neutral" // Default to neutral if invalid
+        }
+
+        // Generate proper UUID for ID
+        entry.ID = fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+                time.Now().UnixNano()&0xFFFFFFFF,
+                (time.Now().UnixNano()>>32)&0xFFFF,
+                0x4000|((time.Now().UnixNano()>>48)&0x0FFF),
+                0x8000|((time.Now().UnixNano()>>60)&0x3FFF),
+                time.Now().UnixNano()&0xFFFFFFFFFFFF)
         entry.CreatedAt = time.Now()
         entry.UpdatedAt = time.Now()
         entry.IsActive = true
