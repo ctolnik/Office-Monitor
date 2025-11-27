@@ -1,0 +1,80 @@
+friendly_name   String
+process_names   Array(String)
+window_title_patterns   Array(String)
+category        Enum8(\'work\' = 1, \'communication\' = 2, \'development\' = 3, \'browsing\' = 4, \'other\' = 5)
+is_active       UInt8   DEFAULT 1
+created_at      DateTime        DEFAULT now()
+updated_at      DateTime        DEFAULT now()
+ilya@docker-01:/opt/Office-Monitor$ # 1. Удалить таблицу
+docker exec -it monitoring-clickhouse clickhouse-client --query="DROP TABLE monitoring.process_catalog"
+
+# 2. Перезапустить сервер (создаст таблицу с правильной схемой)
+docker-compose restart server
+
+# 3. Проверить что таблица создана правильно
+docker exec -it monitoring-clickhouse clickhouse-client --query="DESCRIBE monitoring.process_catalog"
+Restarting monitoring-server ... done
+id      UUID    DEFAULT generateUUIDv4()
+friendly_name   String
+process_names   Array(String)
+window_title_patterns   Array(String)
+category        Enum8(\'productive\' = 1, \'unproductive\' = 2, \'neutral\' = 3, \'communication\' = 4, \'entertainment\' = 5)
+is_active       UInt8   DEFAULT 1
+created_at      DateTime        DEFAULT now()
+updated_at      DateTime        DEFAULT now()
+ilya@docker-01:/opt/Office-Monitor$ # 1. Проверить текущую схему таблицы
+docker exec -it monitoring-clickhouse clickhouse-client --query="DESCRIBE monitoring.process_catalog"
+
+# 2. Показать логи сервера
+docker logs monitoring-server --tail 30
+id      UUID    DEFAULT generateUUIDv4()
+friendly_name   String
+process_names   Array(String)
+window_title_patterns   Array(String)
+category        Enum8(\'productive\' = 1, \'unproductive\' = 2, \'neutral\' = 3, \'communication\' = 4, \'entertainment\' = 5)
+is_active       UInt8   DEFAULT 1
+created_at      DateTime        DEFAULT now()
+updated_at      DateTime        DEFAULT now()
+{"ts":"2025-11-28T00:59:12.219+0300","msg":"✅ application_categories table schema is up to date"}
+{"ts":"2025-11-28T00:59:12.219+0300","msg":"🔄 Auto-syncing process_catalog table schema..."}
+{"ts":"2025-11-28T00:59:12.222+0300","msg":"✅ process_catalog table schema is up to date"}
+{"ts":"2025-11-28T00:59:12.224+0300","msg":"✅ Application categories already loaded","count":10}
+2025/11/28 00:59:12 Server starting on 0.0.0.0:8080
+[GIN] 2025/11/28 - 01:00:07 | 200 |   11.527808ms |     172.16.0.10 | POST     "/api/activity/segment"
+2025/11/28 01:00:18 Creating process catalog entry: friendly_name=Google Chrome, process_names=[chrome.exe], category=browsing
+2025/11/28 01:00:18 Invalid category 'browsing', defaulting to 'neutral'
+{"ts":"2025-11-28T01:00:18.831+0300","msg":"Process catalog entry created","id":"a239a6b4-fc0e-487b-8001-fc0ea239a7c8","friendly_name":"Google Chrome"}
+2025/11/28 01:00:18 Process catalog entry created: id=a239a6b4-fc0e-487b-8001-fc0ea239a7c8
+[GIN] 2025/11/28 - 01:00:18 | 200 |    5.209587ms |     172.16.0.10 | POST     "/api/process-catalog"
+{"ts":"2025-11-28T01:00:18.840+0300","msg":"Process catalog fetched","count":1}
+[GIN] 2025/11/28 - 01:00:18 | 200 |    3.284337ms |     172.16.0.10 | GET      "/api/process-catalog"
+{"ts":"2025-11-28T01:00:25.110+0300","msg":"Fetching application categories","category":"","search":"","active_only":true}
+{"ts":"2025-11-28T01:00:25.114+0300","msg":"Application categories retrieved","count":10,"category_filter":"","search":""}
+{"ts":"2025-11-28T01:00:25.114+0300","msg":"Application categories fetched","count":10}
+[GIN] 2025/11/28 - 01:00:25 | 200 |    4.840485ms |     172.16.0.10 | GET      "/api/categories?search="
+[GIN] 2025/11/28 - 01:00:37 | 200 |    9.461528ms |     172.16.0.10 | POST     "/api/activity/segment"
+[GIN] 2025/11/28 - 01:00:46 | 200 |    3.437077ms |     172.16.0.10 | GET      "/api/alerts/unresolved"
+2025/11/28 01:01:08 Creating process catalog entry: friendly_name=VS Code, process_names=[code.exe], category=development
+2025/11/28 01:01:08 Invalid category 'development', defaulting to 'neutral'
+2025/11/28 01:01:08 Process catalog entry created: id=1f060e98-fc1a-487b-8001-fc1a1f060f86
+{"ts":"2025-11-28T01:01:08.169+0300","msg":"Process catalog entry created","id":"1f060e98-fc1a-487b-8001-fc1a1f060f86","friendly_name":"VS Code"}
+[GIN] 2025/11/28 - 01:01:08 | 200 |    4.656781ms |     172.16.0.10 | POST     "/api/process-catalog"
+{"ts":"2025-11-28T01:01:08.178+0300","msg":"Process catalog fetched","count":2}
+[GIN] 2025/11/28 - 01:01:08 | 200 |    4.027146ms |     172.16.0.10 | GET      "/api/process-catalog"
+2025/11/28 01:01:13 Failed to update process catalog entry: code: 420, message: Cannot UPDATE key column `updated_at`
+[GIN] 2025/11/28 - 01:01:13 | 500 |    3.001868ms |     172.16.0.10 | PUT      "/api/process-catalog/a239a6b4-fc0e-487b-8001-fc0ea239a7c8"
+[GIN] 2025/11/28 - 01:01:37 | 200 |   10.933219ms |     172.16.0.10 | POST     "/api/activity/segment"
+[GIN] 2025/11/28 - 01:01:46 | 200 |    3.216178ms |     172.16.0.10 | GET      "/api/alerts/unresolved"
+ilya@docker-01:/opt/Office-Monitor$ # Удалить и пересоздать
+docker exec -it monitoring-clickhouse clickhouse-client --query="DROP TABLE monitoring.process_catalog"
+docker-compose restart server
+docker exec -it monitoring-clickhouse clickhouse-client --query="DESCRIBE monitoring.process_catalog"
+Restarting monitoring-server ... done
+id      UUID    DEFAULT generateUUIDv4()
+friendly_name   String
+process_names   Array(String)
+window_title_patterns   Array(String)
+category        Enum8(\'productive\' = 1, \'unproductive\' = 2, \'neutral\' = 3, \'communication\' = 4, \'entertainment\' = 5)
+is_active       UInt8   DEFAULT 1
+created_at      DateTime        DEFAULT now()
+updated_at      DateTime        DEFAULT now()

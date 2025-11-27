@@ -726,16 +726,33 @@ func updateProcessCatalogHandler(c *gin.Context) {
                 return
         }
 
+        log.Printf("Updating process catalog entry: id=%s, friendly_name=%s, category=%s",
+                id, entry.FriendlyName, entry.Category)
+
+        // Validate category - must be one of the allowed Enum values
+        validCategories := map[string]bool{
+                "productive": true, "unproductive": true, "neutral": true,
+                "communication": true, "entertainment": true,
+        }
+        if !validCategories[entry.Category] {
+                log.Printf("Invalid category '%s', defaulting to 'neutral'", entry.Category)
+                entry.Category = "neutral"
+        }
+
         entry.ID = id
         entry.UpdatedAt = time.Now()
+        if entry.CreatedAt.IsZero() {
+                entry.CreatedAt = time.Now() // Fallback if not provided
+        }
 
         ctx := c.Request.Context()
         if err := db.UpdateProcessCatalogEntry(ctx, entry); err != nil {
                 log.Printf("Failed to update process catalog entry: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update: " + err.Error()})
                 return
         }
 
+        log.Printf("Process catalog entry updated: id=%s", entry.ID)
         c.JSON(http.StatusOK, entry)
 }
 

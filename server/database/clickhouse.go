@@ -387,14 +387,11 @@ func (db *Database) CreateProcessCatalogEntry(ctx context.Context, entry Process
 }
 
 func (db *Database) UpdateProcessCatalogEntry(ctx context.Context, entry ProcessCatalogEntry) error {
-        query := `ALTER TABLE monitoring.process_catalog UPDATE
-                friendly_name = ?,
-                process_names = ?,
-                window_title_patterns = ?,
-                category = ?,
-                is_active = ?,
-                updated_at = ?
-                WHERE id = ?`
+        // ReplacingMergeTree replaces rows with same ORDER BY key on merge
+        // We INSERT new row with updated_at, and it will replace the old one
+        query := `INSERT INTO monitoring.process_catalog
+                (id, friendly_name, process_names, window_title_patterns, category, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
         // Convert bool to UInt8 for ClickHouse
         var isActive uint8 = 0
@@ -402,9 +399,17 @@ func (db *Database) UpdateProcessCatalogEntry(ctx context.Context, entry Process
                 isActive = 1
         }
 
-        return db.conn.Exec(ctx, query,
-                entry.FriendlyName, entry.ProcessNames, entry.WindowTitlePatterns,
-                entry.Category, isActive, entry.UpdatedAt, entry.ID)
+        err := db.conn.Exec(ctx, query,
+                entry.ID, entry.FriendlyName, entry.ProcessNames, entry.WindowTitlePatterns,
+                entry.Category, isActive, entry.CreatedAt, time.Now())
+
+        if err != nil {
+                zapctx.Error(ctx, "Failed to update process catalog entry", zap.Error(err), zap.String("id", entry.ID))
+                return err
+        }
+
+        zapctx.Info(ctx, "Process catalog entry updated", zap.String("id", entry.ID))
+        return nil
 }
 
 func (db *Database) GetProcessCatalog(ctx context.Context) ([]ProcessCatalogEntry, error) {
