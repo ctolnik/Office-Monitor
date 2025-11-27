@@ -111,3 +111,31 @@ VALUES
         zapctx.Info(ctx, "✅ Default categories loaded successfully")
         return nil
 }
+
+// AutoSyncProcessCatalogTable creates the process_catalog table if it doesn't exist
+// This is used by /api/process-catalog endpoints
+func (db *Database) AutoSyncProcessCatalogTable(ctx context.Context) error {
+        zapctx.Info(ctx, "🔄 Auto-syncing process_catalog table schema...")
+
+        createTableSQL := `
+CREATE TABLE IF NOT EXISTS monitoring.process_catalog (
+    id String,
+    friendly_name String,
+    process_names Array(String),
+    window_title_patterns Array(String),
+    category Enum8('productive' = 1, 'unproductive' = 2, 'neutral' = 3, 'communication' = 4, 'entertainment' = 5),
+    is_active UInt8 DEFAULT 1,
+    created_at DateTime DEFAULT now(),
+    updated_at DateTime DEFAULT now()
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY id`
+
+        err := db.conn.Exec(ctx, createTableSQL)
+        if err != nil {
+                zapctx.Error(ctx, "Failed to create process_catalog table", zap.Error(err))
+                return err
+        }
+
+        zapctx.Info(ctx, "✅ process_catalog table schema is up to date")
+        return nil
+}

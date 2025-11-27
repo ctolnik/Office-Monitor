@@ -165,12 +165,6 @@ func main() {
                 api.GET("/categories/export", exportAppCategoriesHandler)
                 api.POST("/categories/import", importAppCategoriesHandler)
 
-                // Alias for frontend compatibility (process-catalog -> categories)
-                api.GET("/process-catalog", getAppCategoriesHandler)
-                api.POST("/process-catalog", createAppCategoryHandler)
-                api.PUT("/process-catalog/:id", updateAppCategoryHandler)
-                api.DELETE("/process-catalog/:id", deleteAppCategoryHandler)
-
                 // Frontend compatibility - alias for categories
                 api.GET("/settings/app-categories", getAppCategoriesHandler)
 

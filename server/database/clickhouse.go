@@ -38,9 +38,15 @@ func New(ctx context.Context, host string, port int, database, username, passwor
 
         db := &Database{conn: conn}
 
-        // Auto-sync schema on startup (creates table if missing)
+        // Auto-sync schema on startup (creates tables if missing)
         if err := db.AutoSyncApplicationCategoriesTable(ctx); err != nil {
                 zapctx.Warn(ctx, "Failed to auto-sync application_categories table", zap.Error(err))
+                // Don't fail startup - table might be created by migrations
+        }
+
+        // Auto-sync process_catalog table (used by /api/process-catalog)
+        if err := db.AutoSyncProcessCatalogTable(ctx); err != nil {
+                zapctx.Warn(ctx, "Failed to auto-sync process_catalog table", zap.Error(err))
                 // Don't fail startup - table might be created by migrations
         }
 
