@@ -672,9 +672,13 @@ func getProcessCatalogHandler(c *gin.Context) {
 func createProcessCatalogHandler(c *gin.Context) {
         var entry database.ProcessCatalogEntry
         if err := c.ShouldBindJSON(&entry); err != nil {
-                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+                log.Printf("Invalid JSON for process catalog: %v", err)
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
                 return
         }
+
+        log.Printf("Creating process catalog entry: friendly_name=%s, process_names=%v, category=%s",
+                entry.FriendlyName, entry.ProcessNames, entry.Category)
 
         entry.ID = fmt.Sprintf("%d", time.Now().UnixNano())
         entry.CreatedAt = time.Now()
@@ -683,11 +687,13 @@ func createProcessCatalogHandler(c *gin.Context) {
 
         ctx := c.Request.Context()
         if err := db.CreateProcessCatalogEntry(ctx, entry); err != nil {
-                log.Printf("Failed to create process catalog entry: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})
+                log.Printf("Failed to create process catalog entry: %v (friendly_name=%s, category=%s, process_names=%v)",
+                        err, entry.FriendlyName, entry.Category, entry.ProcessNames)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create: " + err.Error()})
                 return
         }
 
+        log.Printf("Process catalog entry created: id=%s", entry.ID)
         c.JSON(http.StatusOK, entry)
 }
 

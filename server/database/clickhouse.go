@@ -367,9 +367,15 @@ func (db *Database) CreateProcessCatalogEntry(ctx context.Context, entry Process
                 (id, friendly_name, process_names, window_title_patterns, category, is_active, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
+        // Convert bool to UInt8 for ClickHouse
+        var isActive uint8 = 0
+        if entry.IsActive {
+                isActive = 1
+        }
+
         err := db.conn.Exec(ctx, query,
                 entry.ID, entry.FriendlyName, entry.ProcessNames, entry.WindowTitlePatterns,
-                entry.Category, entry.IsActive, entry.CreatedAt, entry.UpdatedAt)
+                entry.Category, isActive, entry.CreatedAt, entry.UpdatedAt)
         
         if err != nil {
                 zapctx.Error(ctx, "Failed to create process catalog entry", zap.Error(err), zap.String("friendly_name", entry.FriendlyName))
@@ -390,9 +396,15 @@ func (db *Database) UpdateProcessCatalogEntry(ctx context.Context, entry Process
                 updated_at = ?
                 WHERE id = ?`
 
+        // Convert bool to UInt8 for ClickHouse
+        var isActive uint8 = 0
+        if entry.IsActive {
+                isActive = 1
+        }
+
         return db.conn.Exec(ctx, query,
                 entry.FriendlyName, entry.ProcessNames, entry.WindowTitlePatterns,
-                entry.Category, entry.IsActive, entry.UpdatedAt, entry.ID)
+                entry.Category, isActive, entry.UpdatedAt, entry.ID)
 }
 
 func (db *Database) GetProcessCatalog(ctx context.Context) ([]ProcessCatalogEntry, error) {
