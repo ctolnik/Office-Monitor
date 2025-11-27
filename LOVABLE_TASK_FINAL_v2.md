@@ -240,6 +240,8 @@ const productivityScore = (summary.productive_time / summary.total_active_time) 
 
 Backend уже отдаёт все необходимые данные:
 
+### 📊 Endpoint: Отчёт дня для пользователя
+
 **Endpoint:** `GET /api/reports/daily/{username}?date=YYYY-MM-DD`
 
 ```json
@@ -272,6 +274,94 @@ Backend уже отдаёт все необходимые данные:
 ```
 
 **Примечание:** `productivity_score` уже рассчитывается на backend!
+
+---
+
+### 📚 Endpoint: Справочник программ (управление категориями)
+
+Эти endpoints используются для настройки категорий приложений.
+
+#### **GET /api/process-catalog** - Получить список всех программ в справочнике
+
+**Query параметры:**
+- `category` (optional) - фильтр по категории
+- `search` (optional) - поиск по названию
+- `active_only` (optional, default: true) - только активные записи
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "uuid-here",
+      "process_name": "code.exe",
+      "process_pattern": "code*",
+      "category": "productive",
+      "created_at": "2025-01-15T10:00:00Z",
+      "updated_at": "2025-01-15T10:00:00Z",
+      "created_by": "admin",
+      "updated_by": "admin",
+      "is_active": 1
+    }
+  ],
+  "total": 142
+}
+```
+
+#### **POST /api/process-catalog** - Добавить программу в справочник
+
+**Request body:**
+```json
+{
+  "process_name": "notepad.exe",
+  "process_pattern": "notepad*",
+  "category": "productive"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Category created successfully"
+}
+```
+
+#### **PUT /api/process-catalog/:id** - Обновить категорию программы
+
+**Request body:**
+```json
+{
+  "process_name": "notepad.exe",
+  "process_pattern": "notepad*",
+  "category": "neutral"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Category updated successfully"
+}
+```
+
+#### **DELETE /api/process-catalog/:id** - Удалить программу из справочника
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Category deleted successfully"
+}
+```
+
+---
+
+### 🔄 Важно: Backend URL
+
+**Production:** `http://monitor.net.gslaudit.ru`  
+**Все API запросы:** `http://monitor.net.gslaudit.ru/api/...`
 
 ---
 
