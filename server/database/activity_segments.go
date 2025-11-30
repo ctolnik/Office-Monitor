@@ -1,20 +1,20 @@
 package database
 
 import (
-	"context"
-	"fmt"
-	"time"
+        "context"
+        "fmt"
+        "time"
 
-	"github.com/ctolnik/Office-Monitor/zapctx"
-	"go.uber.org/zap"
+        "github.com/ctolnik/Office-Monitor/zapctx"
+        "go.uber.org/zap"
 )
 
 // GetActivitySegmentsByUsername returns activity segments for user in time range
 func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username string, start, end time.Time) ([]ActivitySegment, error) {
-	startStr := start.Format("2006-01-02 15:04:05")
-	endStr := end.Format("2006-01-02 15:04:05")
+        startStr := start.Format("2006-01-02 15:04:05")
+        endStr := end.Format("2006-01-02 15:04:05")
 
-	query := fmt.Sprintf(`
+        query := fmt.Sprintf(`
                 SELECT 
                         timestamp_start,
                         timestamp_end,
@@ -32,64 +32,73 @@ func (db *Database) GetActivitySegmentsByUsername(ctx context.Context, username 
                 ORDER BY timestamp_start ASC
                 LIMIT 10000`, startStr, endStr)
 
-	zapctx.Info(ctx, "GetActivitySegmentsByUsername",
-		zap.String("username", username),
-		zap.String("start", startStr),
-		zap.String("end", endStr),
-		zap.String("query", query))
+        zapctx.Info(ctx, "GetActivitySegmentsByUsername",
+                zap.String("username", username),
+                zap.String("start", startStr),
+                zap.String("end", endStr),
+                zap.String("query", query))
 
-	rows, err := db.conn.Query(ctx, query, username)
-	if err != nil {
-		zapctx.Error(ctx, "Query failed", zap.Error(err), zap.String("query", query))
-		return nil, err
-	}
-	defer rows.Close()
+        rows, err := db.conn.Query(ctx, query, username)
+        if err != nil {
+                zapctx.Error(ctx, "Query failed", zap.Error(err), zap.String("query", query))
+                return nil, err
+        }
+        defer rows.Close()
 
-	segments := make([]ActivitySegment, 0)
-	for rows.Next() {
-		var s ActivitySegment
-		if err := rows.Scan(
-			&s.TimestampStart,
-			&s.TimestampEnd,
-			&s.DurationSec,
-			&s.State,
-			&s.ComputerName,
-			&s.Username,
-			&s.ProcessName,
-			&s.WindowTitle,
-			&s.SessionID,
-		); err != nil {
-			zapctx.Error(ctx, "Failed to scan activity segment row", zap.Error(err))
-			continue
-		}
-		segments = append(segments, s)
-	}
+        // Load process catalog for category matching
+        processCatalog, _ := db.GetProcessCatalog(ctx)
 
-	if err := rows.Err(); err != nil {
-		zapctx.Error(ctx, "Error iterating activity segment rows", zap.Error(err))
-		return nil, err
-	}
+        segments := make([]ActivitySegment, 0)
+        for rows.Next() {
+                var s ActivitySegment
+                if err := rows.Scan(
+                        &s.TimestampStart,
+                        &s.TimestampEnd,
+                        &s.DurationSec,
+                        &s.State,
+                        &s.ComputerName,
+                        &s.Username,
+                        &s.ProcessName,
+                        &s.WindowTitle,
+                        &s.SessionID,
+                ); err != nil {
+                        zapctx.Error(ctx, "Failed to scan activity segment row", zap.Error(err))
+                        continue
+                }
+                // Set category based on state and process catalog
+                if s.State == "idle" || s.State == "offline" {
+                        s.Category = s.State
+                } else {
+                        s.Category = matchProcessToCatalogInternal(s.ProcessName, processCatalog)
+                }
+                segments = append(segments, s)
+        }
 
-	// Count segments by state for debugging
-	stateCount := make(map[string]int)
-	for _, seg := range segments {
-		stateCount[seg.State]++
-	}
+        if err := rows.Err(); err != nil {
+                zapctx.Error(ctx, "Error iterating activity segment rows", zap.Error(err))
+                return nil, err
+        }
 
-	zapctx.Info(ctx, "GetActivitySegmentsByUsername result",
-		zap.String("username", username),
-		zap.Int("segments_count", len(segments)),
-		zap.Any("states", stateCount))
+        // Count segments by state for debugging
+        stateCount := make(map[string]int)
+        for _, seg := range segments {
+                stateCount[seg.State]++
+        }
 
-	return segments, nil
+        zapctx.Info(ctx, "GetActivitySegmentsByUsername result",
+                zap.String("username", username),
+                zap.Int("segments_count", len(segments)),
+                zap.Any("states", stateCount))
+
+        return segments, nil
 }
 
 // GetApplicationUsageFromSegments returns application usage statistics from activity segments
 func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, username string, start, end time.Time) ([]ApplicationUsage, error) {
-	startStr := start.Format("2006-01-02 15:04:05")
-	endStr := end.Format("2006-01-02 15:04:05")
+        startStr := start.Format("2006-01-02 15:04:05")
+        endStr := end.Format("2006-01-02 15:04:05")
 
-	query := fmt.Sprintf(`
+        query := fmt.Sprintf(`
                 SELECT 
                         process_name,
                         window_title,
@@ -103,66 +112,71 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 ORDER BY total_duration DESC
                 LIMIT 50`, startStr, endStr)
 
-	zapctx.Info(ctx, "GetApplicationUsageFromSegments",
-		zap.String("username", username),
-		zap.String("start", startStr),
-		zap.String("end", endStr),
-		zap.String("query", query))
+        zapctx.Info(ctx, "GetApplicationUsageFromSegments",
+                zap.String("username", username),
+                zap.String("start", startStr),
+                zap.String("end", endStr),
+                zap.String("query", query))
 
-	rows, err := db.conn.Query(ctx, query, username)
-	if err != nil {
-		zapctx.Error(ctx, "Query failed", zap.Error(err))
-		return nil, err
-	}
-	defer rows.Close()
+        rows, err := db.conn.Query(ctx, query, username)
+        if err != nil {
+                zapctx.Error(ctx, "Query failed", zap.Error(err))
+                return nil, err
+        }
+        defer rows.Close()
 
-	// Load process catalog first (user's "Справочник программ")
-	processCatalog, _ := db.GetProcessCatalog(ctx)
+        // Load process catalog first (user's "Справочник программ")
+        processCatalog, err := db.GetProcessCatalog(ctx)
+        if err != nil {
+                zapctx.Warn(ctx, "Failed to load process catalog", zap.Error(err))
+                processCatalog = []ProcessCatalogEntry{}
+        }
+        zapctx.Debug(ctx, "Process catalog loaded for matching", zap.Int("entries", len(processCatalog)))
 
-	// Load application categories as fallback
-	categories, err := db.GetApplicationCategories(ctx, "", "", true)
-	if err != nil {
-		zapctx.Warn(ctx, "Failed to load application categories, using default 'neutral'", zap.Error(err))
-		categories = []ApplicationCategory{}
-	}
+        // Load application categories as fallback
+        categories, err := db.GetApplicationCategories(ctx, "", "", true)
+        if err != nil {
+                zapctx.Warn(ctx, "Failed to load application categories, using default 'neutral'", zap.Error(err))
+                categories = []ApplicationCategory{}
+        }
 
-	apps := make([]ApplicationUsage, 0)
-	for rows.Next() {
-		var app ApplicationUsage
-		var totalDuration uint64
-		var count uint64
+        apps := make([]ApplicationUsage, 0)
+        for rows.Next() {
+                var app ApplicationUsage
+                var totalDuration uint64
+                var count uint64
 
-		if err := rows.Scan(&app.ProcessName, &app.WindowTitle, &totalDuration, &count); err != nil {
-			zapctx.Error(ctx, "Failed to scan application usage row", zap.Error(err))
-			continue
-		}
+                if err := rows.Scan(&app.ProcessName, &app.WindowTitle, &totalDuration, &count); err != nil {
+                        zapctx.Error(ctx, "Failed to scan application usage row", zap.Error(err))
+                        continue
+                }
 
-		// Skip "unknown" processes (system/protected processes that agent can't monitor)
-		if app.ProcessName == "unknown" || app.ProcessName == "" {
-			continue
-		}
+                // Skip "unknown" processes (system/protected processes that agent can't monitor)
+                if app.ProcessName == "unknown" || app.ProcessName == "" {
+                        continue
+                }
 
-		app.Duration = totalDuration
-		app.TotalDuration = totalDuration
-		app.Count = int(count)
+                app.Duration = totalDuration
+                app.TotalDuration = totalDuration
+                app.Count = int(count)
 
-		// Match process to category: first try process_catalog, then application_categories
-		app.Category = matchProcessToCatalogInternal(app.ProcessName, processCatalog)
-		if app.Category == "neutral" {
-			app.Category = matchProcessToCategoryInternal(app.ProcessName, categories)
-		}
+                // Match process to category: first try process_catalog, then application_categories
+                app.Category = matchProcessToCatalogInternal(app.ProcessName, processCatalog)
+                if app.Category == "neutral" {
+                        app.Category = matchProcessToCategoryInternal(app.ProcessName, categories)
+                }
 
-		apps = append(apps, app)
-	}
+                apps = append(apps, app)
+        }
 
-	if err := rows.Err(); err != nil {
-		zapctx.Error(ctx, "Error iterating application usage rows", zap.Error(err))
-		return nil, err
-	}
+        if err := rows.Err(); err != nil {
+                zapctx.Error(ctx, "Error iterating application usage rows", zap.Error(err))
+                return nil, err
+        }
 
-	zapctx.Info(ctx, "GetApplicationUsageFromSegments result",
-		zap.String("username", username),
-		zap.Int("apps_count", len(apps)))
+        zapctx.Info(ctx, "GetApplicationUsageFromSegments result",
+                zap.String("username", username),
+                zap.Int("apps_count", len(apps)))
 
-	return apps, nil
+        return apps, nil
 }
