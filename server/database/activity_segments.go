@@ -116,7 +116,10 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
         }
         defer rows.Close()
 
-        // Load application categories once for matching
+        // Load process catalog first (user's "Справочник программ")
+        processCatalog, _ := db.GetProcessCatalog(ctx)
+
+        // Load application categories as fallback
         categories, err := db.GetApplicationCategories(ctx, "", "", true)
         if err != nil {
                 zapctx.Warn(ctx, "Failed to load application categories, using default 'neutral'", zap.Error(err))
@@ -143,8 +146,11 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 app.TotalDuration = totalDuration
                 app.Count = int(count)
                 
-                // Match process to category
-                app.Category = matchProcessToCategoryInternal(app.ProcessName, categories)
+                // Match process to category: first try process_catalog, then application_categories
+                app.Category = matchProcessToCatalogInternal(app.ProcessName, processCatalog)
+                if app.Category == "neutral" {
+                        app.Category = matchProcessToCategoryInternal(app.ProcessName, categories)
+                }
                 
                 apps = append(apps, app)
         }
