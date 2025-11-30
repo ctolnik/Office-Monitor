@@ -274,12 +274,12 @@ func (db *Database) GetFileEvents(ctx context.Context, computerName string, from
 
 func (db *Database) InsertActivitySegment(ctx context.Context, segment ActivitySegment) error {
         query := `INSERT INTO monitoring.activity_segments
-                (timestamp_start, timestamp_end, duration_sec, state, computer_name, username, process_name, window_title, session_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                (timestamp_start, timestamp_end, duration_sec, state, computer_name, username, process_name, window_title, session_id, category)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         return db.conn.Exec(ctx, query,
                 segment.TimestampStart, segment.TimestampEnd, segment.DurationSec,
                 segment.State, segment.ComputerName, segment.Username,
-                segment.ProcessName, segment.WindowTitle, segment.SessionID)
+                segment.ProcessName, segment.WindowTitle, segment.SessionID, segment.Category)
 }
 
 func (db *Database) GetDailyActivitySummary(ctx context.Context, computerName string, date time.Time) (*DailyActivitySummary, error) {

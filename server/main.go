@@ -623,6 +623,20 @@ func receiveActivitySegmentHandler(c *gin.Context) {
         }
 
         ctx := c.Request.Context()
+
+        // Determine category based on state and process catalog
+        if segment.State == "idle" || segment.State == "offline" {
+                segment.Category = segment.State
+        } else if segment.Category == "" {
+                // Try to match process to category from catalog
+                category, err := db.MatchProcessToCategory(ctx, segment.ProcessName, segment.WindowTitle)
+                if err != nil {
+                        segment.Category = "neutral"
+                } else {
+                        segment.Category = category
+                }
+        }
+
         if err := db.InsertActivitySegment(ctx, segment); err != nil {
                 log.Printf("Failed to insert activity segment: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
