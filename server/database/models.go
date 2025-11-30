@@ -246,22 +246,23 @@ type AlertFull struct {
 }
 
 type DailyReport struct {
-        Date              string               `json:"date"`
-        ComputerName      string               `json:"computer_name"`
-        Username          string               `json:"username"`
-        TotalActiveTime   uint64               `json:"total_active_time"`
-        TotalIdleTime     uint64               `json:"total_idle_time"`
-        ProductivityScore float64              `json:"productivity_score"`
-        Applications      []ApplicationUsage   `json:"applications"`
-        Screenshots       []ScreenshotMetadata `json:"screenshots"`
-        KeyboardActivity  []KeyboardPeriod     `json:"keyboard_activity"`
-        KeyboardPeriods   []KeyboardPeriod     `json:"keyboard_periods"`
-        ActivityEvents    []ActivityEvent      `json:"activity_events"`
-        FileEvents        []FileCopyEvent      `json:"file_events"`
-        USBEvents         []USBEvent           `json:"usb_events"`
-        Alerts            []AlertFull          `json:"alerts"`
-        DLPAlerts         []AlertFull          `json:"dlp_alerts"`
-        Summary           ActivitySummary      `json:"summary"`
+        Date               string                `json:"date"`
+        ComputerName       string                `json:"computer_name"`
+        Username           string                `json:"username"`
+        TotalActiveTime    uint64                `json:"total_active_time"`
+        TotalIdleTime      uint64                `json:"total_idle_time"`
+        ProductivityScore  float64               `json:"productivity_score"`
+        Applications       []ApplicationUsage    `json:"applications"`
+        ApplicationTimeline []ApplicationTimeline `json:"application_timeline"` // When each app was used
+        Screenshots        []ScreenshotMetadata  `json:"screenshots"`
+        KeyboardActivity   []KeyboardPeriod      `json:"keyboard_activity"`
+        KeyboardPeriods    []KeyboardPeriod      `json:"keyboard_periods"`
+        ActivityEvents     []ActivityEvent       `json:"activity_events"`
+        FileEvents         []FileCopyEvent       `json:"file_events"`
+        USBEvents          []USBEvent            `json:"usb_events"`
+        Alerts             []AlertFull           `json:"alerts"`
+        DLPAlerts          []AlertFull           `json:"dlp_alerts"`
+        Summary            ActivitySummary       `json:"summary"`
 }
 
 type ActivitySummary struct {
@@ -282,6 +283,23 @@ type ImportError struct {
         Line        int    `json:"line"`
         ProcessName string `json:"process_name"`
         Error       string `json:"error"`
+}
+
+// ApplicationTimePeriod represents a time period when an application was used
+type ApplicationTimePeriod struct {
+        Start       string `json:"start"`        // ISO timestamp
+        End         string `json:"end"`          // ISO timestamp
+        DurationSec uint32 `json:"duration_sec"` // Duration in seconds
+        WindowTitle string `json:"window_title"` // Window title during this period
+}
+
+// ApplicationTimeline shows when each application was used during the day
+type ApplicationTimeline struct {
+        ProcessName  string                  `json:"process_name"`
+        FriendlyName string                  `json:"friendly_name"`
+        Category     string                  `json:"category"`
+        TotalSeconds uint64                  `json:"total_seconds"`
+        Periods      []ApplicationTimePeriod `json:"periods"` // List of usage periods
 }
 
 type ImportResult struct {

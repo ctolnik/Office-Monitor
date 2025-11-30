@@ -3,6 +3,7 @@ package database
 import (
         "context"
         "fmt"
+        "strings"
         "time"
 
         "github.com/ctolnik/Office-Monitor/zapctx"
@@ -179,4 +180,129 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 zap.Int("apps_count", len(apps)))
 
         return apps, nil
+}
+
+// GetApplicationTimeline returns time periods when each application was used
+func (db *Database) GetApplicationTimeline(ctx context.Context, username string, start, end time.Time) ([]ApplicationTimeline, error) {
+        startStr := start.Format("2006-01-02 15:04:05")
+        endStr := end.Format("2006-01-02 15:04:05")
+
+        // Get all activity segments ordered by process and time
+        query := fmt.Sprintf(`
+                SELECT 
+                        process_name,
+                        window_title,
+                        timestamp_start,
+                        timestamp_end,
+                        duration_sec
+                FROM monitoring.activity_segments
+                WHERE username = ? 
+                  AND timestamp_start >= toDateTime64('%s', 3)
+                  AND timestamp_start < toDateTime64('%s', 3)
+                  AND state = 'active'
+                ORDER BY process_name, timestamp_start ASC`, startStr, endStr)
+
+        rows, err := db.conn.Query(ctx, query, username)
+        if err != nil {
+                zapctx.Error(ctx, "GetApplicationTimeline query failed", zap.Error(err))
+                return nil, err
+        }
+        defer rows.Close()
+
+        // Load process catalog for category and friendly name matching
+        processCatalog, _ := db.GetProcessCatalog(ctx)
+
+        // Map to collect periods by process
+        timelineMap := make(map[string]*ApplicationTimeline)
+
+        for rows.Next() {
+                var processName, windowTitle string
+                var tsStart, tsEnd time.Time
+                var durationSec uint32
+
+                if err := rows.Scan(&processName, &windowTitle, &tsStart, &tsEnd, &durationSec); err != nil {
+                        zapctx.Warn(ctx, "Failed to scan timeline row", zap.Error(err))
+                        continue
+                }
+
+                // Skip unknown processes
+                if processName == "unknown" || processName == "" {
+                        continue
+                }
+
+                // Get or create timeline entry for this process
+                timeline, exists := timelineMap[processName]
+                if !exists {
+                        category := matchProcessToCatalogInternal(processName, processCatalog)
+                        friendlyName := getFriendlyNameFromCatalog(processName, processCatalog)
+                        timeline = &ApplicationTimeline{
+                                ProcessName:  processName,
+                                FriendlyName: friendlyName,
+                                Category:     category,
+                                TotalSeconds: 0,
+                                Periods:      make([]ApplicationTimePeriod, 0),
+                        }
+                        timelineMap[processName] = timeline
+                }
+
+                // Add this period
+                period := ApplicationTimePeriod{
+                        Start:       tsStart.Format(time.RFC3339),
+                        End:         tsEnd.Format(time.RFC3339),
+                        DurationSec: durationSec,
+                        WindowTitle: windowTitle,
+                }
+                timeline.Periods = append(timeline.Periods, period)
+                timeline.TotalSeconds += uint64(durationSec)
+        }
+
+        if err := rows.Err(); err != nil {
+                zapctx.Error(ctx, "Error iterating timeline rows", zap.Error(err))
+                return nil, err
+        }
+
+        // Convert map to slice and sort by total time descending
+        result := make([]ApplicationTimeline, 0, len(timelineMap))
+        for _, timeline := range timelineMap {
+                result = append(result, *timeline)
+        }
+
+        // Sort by TotalSeconds descending
+        for i := 0; i < len(result)-1; i++ {
+                for j := i + 1; j < len(result); j++ {
+                        if result[j].TotalSeconds > result[i].TotalSeconds {
+                                result[i], result[j] = result[j], result[i]
+                        }
+                }
+        }
+
+        zapctx.Info(ctx, "GetApplicationTimeline result",
+                zap.String("username", username),
+                zap.Int("apps_count", len(result)))
+
+        return result, nil
+}
+
+// getFriendlyNameFromCatalog returns friendly name from process catalog
+func getFriendlyNameFromCatalog(processName string, catalog []ProcessCatalogEntry) string {
+        processLower := strings.ToLower(processName)
+        processNorm := strings.TrimSuffix(processLower, ".exe")
+
+        for _, entry := range catalog {
+                if !entry.IsActive {
+                        continue
+                }
+                for _, procName := range entry.ProcessNames {
+                        catalogNorm := strings.TrimSuffix(strings.ToLower(procName), ".exe")
+                        if strings.EqualFold(procName, processName) ||
+                                catalogNorm == processNorm ||
+                                strings.Contains(processNorm, catalogNorm) ||
+                                strings.Contains(catalogNorm, processNorm) {
+                                return entry.FriendlyName
+                        }
+                }
+        }
+
+        // Return process name without .exe as fallback
+        return strings.TrimSuffix(processName, ".exe")
 }
