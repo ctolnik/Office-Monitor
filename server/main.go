@@ -31,6 +31,7 @@ var (
 func main() {
 	var err error
 
+<<<<<<< HEAD
 	cfg, err = config.Load("config.yaml")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -173,6 +174,152 @@ func main() {
 		api.GET("/screenshots/file/:id", getScreenshotHandler)
 	}
 
+=======
+	// logger, err = zap.NewProduction()
+
+	cfg, err = config.Load("config.yaml")
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	// Initialize logger
+	logger, err := initLogger(cfg.Logging)
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+
+	defer logger.Sync()
+	logger.Info("Log level", zap.String("level", cfg.Logging.Level))
+
+	// Initialize timezone
+	appLocation, err = time.LoadLocation(cfg.Database.Timezone)
+	if err != nil {
+		log.Printf("Failed to load timezone %s, using UTC: %v", cfg.Database.Timezone, err)
+		appLocation = time.UTC
+	}
+
+	// Initialize cache with 30 second TTL
+	dashCache = NewDashboardCache(30 * time.Second)
+
+	// Create context with logger for database initialization
+	ctx := zapctx.WithLogger(context.Background(), logger)
+
+	db, err = database.New(
+		ctx,
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.Database,
+		cfg.Database.Username,
+		cfg.Database.Password,
+	)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	st, err = storage.New(
+		cfg.Storage.Endpoint,
+		cfg.Storage.AccessKey,
+		cfg.Storage.SecretKey,
+		cfg.Storage.UseSSL,
+		cfg.Storage.Buckets.Screenshots,
+		cfg.Storage.Buckets.USBCopies,
+		cfg.Storage.PublicEndpoint,
+	)
+	if err != nil {
+		log.Fatalf("Failed to connect to MinIO: %v", err)
+	}
+	storageClient = st
+
+	if cfg.Server.Mode == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	router := gin.Default()
+
+	// Add logger middleware to all routes
+	router.Use(loggerMiddleware(logger))
+
+	router.LoadHTMLGlob("web/templates/*")
+	router.Static("/static", "web/static")
+
+	router.GET("/", indexHandler)
+
+	api := router.Group("/api")
+	{
+		api.POST("/activity", receiveActivityHandler)
+		api.POST("/events/batch", receiveBatchEventsHandler)
+		api.GET("/employees", getEmployeesHandler)
+		api.GET("/activity/recent", getRecentActivityHandler)
+
+		api.POST("/activity/segment", receiveActivitySegmentHandler)
+		api.GET("/activity/summary", getDailyActivitySummaryHandler)
+		api.GET("/activity/segments", getActivitySegmentsHandler)
+
+		api.POST("/usb/event", receiveUSBEventHandler)
+		api.GET("/usb/events", getUSBEventsHandler)
+
+		api.POST("/file/event", receiveFileEventHandler)
+		api.GET("/file/events", getFileEventsHandler)
+
+		api.POST("/screenshot", receiveScreenshotHandler)
+
+		api.POST("/keyboard/event", receiveKeyboardEventHandler)
+		api.GET("/keyboard/events", getKeyboardEventsHandler)
+
+		api.GET("/process-catalog", getProcessCatalogHandler)
+		api.POST("/process-catalog", createProcessCatalogHandler)
+		api.PUT("/process-catalog/:id", updateProcessCatalogHandler)
+		api.DELETE("/process-catalog/:id", deleteProcessCatalogHandler)
+
+		api.GET("/dashboard/stats", getDashboardStatsHandler)
+		api.GET("/dashboard/active-now", getActiveNowHandler)
+		api.GET("/reports/daily/:username", getDailyReportHandler)
+		api.GET("/alerts/unresolved", getUnresolvedAlertsHandler)
+
+		api.GET("/agents", getAgentsHandler)
+		api.GET("/agents/:computer_name/config", getAgentConfigHandler)
+		api.POST("/agents/:computer_name/config", updateAgentConfigHandler)
+		api.DELETE("/agents/:computer_name", deleteAgentHandler)
+
+		api.GET("/employees/all", getAllEmployeesHandler)
+		api.POST("/employees", createEmployeeHandler)
+		api.PUT("/employees/:id", updateEmployeeHandler)
+		api.DELETE("/employees/:id", deleteEmployeeHandler)
+
+		// Users list (frontend compatibility - returns unique usernames)
+		api.GET("/users", getUsersListHandler)
+
+		api.GET("/activity/applications/:username", getApplicationsHandler)
+		api.GET("/keyboard/:username", getKeyboardEventsHandler2)
+		api.GET("/usb/:username", getUSBEventsHandler2)
+		api.GET("/files/:username", getFileEventsHandler2)
+		api.GET("/screenshots/:username", getScreenshotsHandler)
+
+		// Backward compatibility alias for frontend (screenshot → screenshots/file)
+		api.GET("/screenshot/:id", getScreenshotHandler)
+
+		api.GET("/alerts", getAlertsHandler)
+		api.PUT("/alerts/:id/resolve", resolveAlertHandler)
+
+		api.GET("/categories", getAppCategoriesHandler)
+		api.POST("/categories", createAppCategoryHandler)
+		api.PUT("/categories/:id", updateAppCategoryHandler)
+		api.DELETE("/categories/:id", deleteAppCategoryHandler)
+		api.POST("/categories/bulk", bulkUpdateAppCategoriesHandler)
+		api.GET("/categories/export", exportAppCategoriesHandler)
+		api.POST("/categories/import", importAppCategoriesHandler)
+
+		// Frontend compatibility - alias for categories
+		api.GET("/settings/app-categories", getAppCategoriesHandler)
+
+		api.GET("/settings", getGeneralSettingsHandler)
+		api.PUT("/settings", updateGeneralSettingsHandler)
+		api.POST("/settings/logo", uploadLogoHandler)
+
+		api.GET("/screenshots/file/:id", getScreenshotHandler)
+	}
+
+>>>>>>> 2df2c20 (Improve application category management and data processing logic)
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Server starting on %s", addr)
 	if err := router.Run(addr); err != nil {

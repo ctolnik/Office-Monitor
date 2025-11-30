@@ -113,15 +113,15 @@ func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string
 	if err != nil {
 		return "", fmt.Errorf("object not found: %w", err)
 	}
-	
+
 	// Generate presigned URL with internal endpoint
 	url, err := s.client.PresignedGetObject(ctx, bucket, objectName, 3600*time.Second, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
 	}
-	
+
 	urlStr := url.String()
-	
+
 	// Replace internal endpoint with public endpoint if configured
 	if s.publicEndpoint != "" {
 		// URL format: http://minio:9000/bucket/object?params
@@ -134,6 +134,6 @@ func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string
 			urlStr = s.publicEndpoint + pathWithQuery
 		}
 	}
-	
+
 	return urlStr, nil
 }

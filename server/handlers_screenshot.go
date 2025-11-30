@@ -45,7 +45,7 @@ func getScreenshotHandler(c *gin.Context) {
 		return
 	}
 
-	zapctx.Debug(ctx, "Serving screenshot", 
+	zapctx.Debug(ctx, "Serving screenshot",
 		zap.String("screenshot_id", screenshotID),
 		zap.String("object_name", objectName),
 		zap.Int64("size", stat.Size))
