@@ -1,3 +1,6 @@
 [submodule "frontend"]
 	path = frontend
 	url = git@github.com:ctolnik/office-visor-ru.git
+[submodule "office-visor-ru"]
+	path = office-visor-ru
+	url = git@github.com:ctolnik/office-visor-ru.git

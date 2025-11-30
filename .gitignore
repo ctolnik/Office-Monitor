@@ -39,3 +39,4 @@ frontend
 server/monitoring-server
 server/server
 server/monitoring.db
+server/logs/
