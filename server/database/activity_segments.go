@@ -161,6 +161,9 @@ func (db *Database) GetApplicationUsageFromSegments(ctx context.Context, usernam
                 app.TotalDuration = totalDuration
                 app.Count = int(count)
 
+                // Get friendly name from process catalog (e.g., "chrome.exe" -> "Google Chrome")
+                app.ApplicationName = getFriendlyNameFromCatalog(app.ProcessName, processCatalog)
+
                 // Match process to category: first try process_catalog, then application_categories
                 app.Category = matchProcessToCatalogInternal(app.ProcessName, processCatalog)
                 if app.Category == "neutral" {
