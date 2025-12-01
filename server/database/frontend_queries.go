@@ -859,15 +859,28 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
                 report.DLPAlerts = alerts
         }
 
-        // Calculate activity summary from segments (by state)
+        // Calculate activity summary from segments (by state and category)
         var totalActiveTime, totalIdleTime, totalOfflineTime uint64
-        var productiveTime, unproductiveTime, neutralTime uint64
+        var productiveTime, unproductiveTime, neutralTime, communicationTime, entertainmentTime uint64
 
-        // Calculate time by state from segments
+        // Calculate time by state AND category from segments
         for _, seg := range activitySegments {
                 switch seg.State {
                 case "active":
                         totalActiveTime += uint64(seg.DurationSec)
+                        // Count time by category for active segments
+                        switch seg.Category {
+                        case "productive":
+                                productiveTime += uint64(seg.DurationSec)
+                        case "unproductive":
+                                unproductiveTime += uint64(seg.DurationSec)
+                        case "communication":
+                                communicationTime += uint64(seg.DurationSec)
+                        case "entertainment":
+                                entertainmentTime += uint64(seg.DurationSec)
+                        default:
+                                neutralTime += uint64(seg.DurationSec)
+                        }
                 case "idle":
                         totalIdleTime += uint64(seg.DurationSec)
                 case "offline":
@@ -875,17 +888,15 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
                 }
         }
 
-        // Calculate time by category from applications
-        for _, app := range report.Applications {
-                switch app.Category {
-                case "productive":
-                        productiveTime += app.Duration
-                case "unproductive":
-                        unproductiveTime += app.Duration
-                default:
-                        neutralTime += app.Duration
-                }
-        }
+        // Log category breakdown for debugging
+        zapctx.Info(ctx, "Activity time breakdown",
+                zap.String("username", username),
+                zap.Uint64("productive", productiveTime),
+                zap.Uint64("unproductive", unproductiveTime),
+                zap.Uint64("neutral", neutralTime),
+                zap.Uint64("communication", communicationTime),
+                zap.Uint64("entertainment", entertainmentTime),
+                zap.Uint64("total_active", totalActiveTime))
 
         // Calculate productivity score: (productive - unproductive) / total * 100
         // Range: 0-100, where 50 is neutral

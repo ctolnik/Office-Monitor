@@ -47,7 +47,9 @@ func main() {
         // Initialize timezone
         appLocation, err = time.LoadLocation(cfg.Database.Timezone)
         if err != nil {
-                log.Printf("Failed to load timezone %s, using UTC: %v", cfg.Database.Timezone, err)
+                logger.Warn("Failed to load timezone, using UTC",
+                        zap.String("timezone", cfg.Database.Timezone),
+                        zap.Error(err))
                 appLocation = time.UTC
         }
 
@@ -66,7 +68,7 @@ func main() {
                 cfg.Database.Password,
         )
         if err != nil {
-                log.Fatalf("Failed to connect to database: %v", err)
+                logger.Fatal("Failed to connect to database", zap.Error(err))
         }
         defer db.Close()
 
@@ -80,7 +82,7 @@ func main() {
                 cfg.Storage.PublicEndpoint,
         )
         if err != nil {
-                log.Fatalf("Failed to connect to MinIO: %v", err)
+                logger.Fatal("Failed to connect to MinIO", zap.Error(err))
         }
         storageClient = st
 
@@ -174,9 +176,9 @@ func main() {
         }
 
         addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-        log.Printf("Server starting on %s", addr)
+        logger.Info("Server starting", zap.String("address", addr))
         if err := router.Run(addr); err != nil {
-                log.Fatalf("Failed to start server: %v", err)
+                logger.Fatal("Failed to start server", zap.Error(err))
         }
 }
 
@@ -225,7 +227,7 @@ func receiveActivityHandler(c *gin.Context) {
 
         ctx := c.Request.Context()
         if err := db.InsertActivityEvent(ctx, event); err != nil {
-                log.Printf("Failed to insert activity: %v", err)
+                zapctx.Error(ctx, "Failed to insert activity", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
                 return
         }
@@ -284,7 +286,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                         }
 
                         if err := json.Unmarshal(event.Data, &activityData); err != nil {
-                                log.Printf("Failed to unmarshal activity event: %v", err)
+                                zapctx.Warn(ctx, "Failed to unmarshal activity event", zap.Error(err))
                                 continue
                         }
 
@@ -312,7 +314,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                         }
 
                         if err := db.InsertActivityEvent(ctx, activityEvent); err != nil {
-                                log.Printf("Failed to insert activity event: %v", err)
+                                zapctx.Warn(ctx, "Failed to insert activity event", zap.Error(err))
                                 continue
                         }
                         activityCount++
@@ -320,7 +322,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                 case "keyboard":
                         var keyboardData database.KeyboardEvent
                         if err := json.Unmarshal(event.Data, &keyboardData); err != nil {
-                                log.Printf("Failed to unmarshal keyboard event: %v", err)
+                                zapctx.Warn(ctx, "Failed to unmarshal keyboard event", zap.Error(err))
                                 continue
                         }
 
@@ -332,7 +334,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                         }
 
                         if err := db.InsertKeyboardEvent(ctx, keyboardData); err != nil {
-                                log.Printf("Failed to insert keyboard event: %v", err)
+                                zapctx.Warn(ctx, "Failed to insert keyboard event", zap.Error(err))
                                 continue
                         }
                         keyboardCount++
@@ -340,7 +342,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                 case "usb":
                         var usbData database.USBEvent
                         if err := json.Unmarshal(event.Data, &usbData); err != nil {
-                                log.Printf("Failed to unmarshal USB event: %v", err)
+                                zapctx.Warn(ctx, "Failed to unmarshal USB event", zap.Error(err))
                                 continue
                         }
 
@@ -352,7 +354,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                         }
 
                         if err := db.InsertUSBEvent(ctx, usbData); err != nil {
-                                log.Printf("Failed to insert USB event: %v", err)
+                                zapctx.Warn(ctx, "Failed to insert USB event", zap.Error(err))
                                 continue
                         }
                         usbCount++
@@ -360,7 +362,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
                 case "file":
                         var fileData database.FileCopyEvent
                         if err := json.Unmarshal(event.Data, &fileData); err != nil {
-                                log.Printf("Failed to unmarshal file event: %v", err)
+                                zapctx.Warn(ctx, "Failed to unmarshal file event", zap.Error(err))
                                 continue
                         }
 
@@ -372,13 +374,13 @@ func receiveBatchEventsHandler(c *gin.Context) {
                         }
 
                         if err := db.InsertFileCopyEvent(ctx, fileData); err != nil {
-                                log.Printf("Failed to insert file event: %v", err)
+                                zapctx.Warn(ctx, "Failed to insert file event", zap.Error(err))
                                 continue
                         }
                         fileCount++
 
                 default:
-                        log.Printf("Unknown event type '%s', ignoring", event.Type)
+                        zapctx.Debug(ctx, "Unknown event type, ignoring", zap.String("type", event.Type))
                         unknownCount++
                 }
         }
@@ -439,7 +441,7 @@ func receiveUSBEventHandler(c *gin.Context) {
 
         ctx := c.Request.Context()
         if err := db.InsertUSBEvent(ctx, event); err != nil {
-                log.Printf("Failed to insert USB event: %v", err)
+                zapctx.Error(ctx, "Failed to insert USB event", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
                 return
         }
@@ -483,7 +485,7 @@ func receiveFileEventHandler(c *gin.Context) {
 
         ctx := c.Request.Context()
         if err := db.InsertFileCopyEvent(ctx, event); err != nil {
-                log.Printf("Failed to insert file event: %v", err)
+                zapctx.Error(ctx, "Failed to insert file event", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
                 return
         }
@@ -539,7 +541,7 @@ func receiveScreenshotHandler(c *gin.Context) {
 
         minioPath, err := st.UploadScreenshot(ctx, screenshot.ScreenshotID, screenshot.ImageData)
         if err != nil {
-                log.Printf("Failed to upload screenshot to MinIO: %v", err)
+                zapctx.Error(ctx, "Failed to upload screenshot to MinIO", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save screenshot"})
                 return
         }
@@ -556,7 +558,7 @@ func receiveScreenshotHandler(c *gin.Context) {
         }
 
         if err := db.InsertScreenshotMetadata(ctx, meta); err != nil {
-                log.Printf("Failed to insert screenshot metadata: %v", err)
+                zapctx.Error(ctx, "Failed to insert screenshot metadata", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save metadata"})
                 return
         }
@@ -577,7 +579,7 @@ func receiveKeyboardEventHandler(c *gin.Context) {
 
         ctx := c.Request.Context()
         if err := db.InsertKeyboardEvent(ctx, event); err != nil {
-                log.Printf("Failed to insert keyboard event: %v", err)
+                zapctx.Error(ctx, "Failed to insert keyboard event", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
                 return
         }
@@ -638,7 +640,7 @@ func receiveActivitySegmentHandler(c *gin.Context) {
         }
 
         if err := db.InsertActivitySegment(ctx, segment); err != nil {
-                log.Printf("Failed to insert activity segment: %v", err)
+                zapctx.Error(ctx, "Failed to insert activity segment", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save"})
                 return
         }
@@ -682,15 +684,18 @@ func getProcessCatalogHandler(c *gin.Context) {
 }
 
 func createProcessCatalogHandler(c *gin.Context) {
+        ctx := c.Request.Context()
         var entry database.ProcessCatalogEntry
         if err := c.ShouldBindJSON(&entry); err != nil {
-                log.Printf("Invalid JSON for process catalog: %v", err)
+                zapctx.Warn(ctx, "Invalid JSON for process catalog", zap.Error(err))
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
                 return
         }
 
-        log.Printf("Creating process catalog entry: friendly_name=%s, process_names=%v, category=%s",
-                entry.FriendlyName, entry.ProcessNames, entry.Category)
+        zapctx.Info(ctx, "Creating process catalog entry",
+                zap.String("friendly_name", entry.FriendlyName),
+                zap.Strings("process_names", entry.ProcessNames),
+                zap.String("category", entry.Category))
 
         // Validate category - must be one of the allowed Enum values
         validCategories := map[string]bool{
@@ -698,7 +703,7 @@ func createProcessCatalogHandler(c *gin.Context) {
                 "communication": true, "entertainment": true,
         }
         if !validCategories[entry.Category] {
-                log.Printf("Invalid category '%s', defaulting to 'neutral'", entry.Category)
+                zapctx.Warn(ctx, "Invalid category, defaulting to neutral", zap.String("category", entry.Category))
                 entry.Category = "neutral" // Default to neutral if invalid
         }
 
@@ -713,15 +718,17 @@ func createProcessCatalogHandler(c *gin.Context) {
         entry.UpdatedAt = time.Now()
         entry.IsActive = true
 
-        ctx := c.Request.Context()
         if err := db.CreateProcessCatalogEntry(ctx, entry); err != nil {
-                log.Printf("Failed to create process catalog entry: %v (friendly_name=%s, category=%s, process_names=%v)",
-                        err, entry.FriendlyName, entry.Category, entry.ProcessNames)
+                zapctx.Error(ctx, "Failed to create process catalog entry",
+                        zap.Error(err),
+                        zap.String("friendly_name", entry.FriendlyName),
+                        zap.String("category", entry.Category),
+                        zap.Strings("process_names", entry.ProcessNames))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create: " + err.Error()})
                 return
         }
 
-        log.Printf("Process catalog entry created: id=%s", entry.ID)
+        zapctx.Info(ctx, "Process catalog entry created", zap.String("id", entry.ID))
         c.JSON(http.StatusOK, entry)
 }
 
@@ -732,14 +739,17 @@ func updateProcessCatalogHandler(c *gin.Context) {
                 return
         }
 
+        ctx := c.Request.Context()
         var entry database.ProcessCatalogEntry
         if err := c.ShouldBindJSON(&entry); err != nil {
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
                 return
         }
 
-        log.Printf("Updating process catalog entry: id=%s, friendly_name=%s, category=%s",
-                id, entry.FriendlyName, entry.Category)
+        zapctx.Info(ctx, "Updating process catalog entry",
+                zap.String("id", id),
+                zap.String("friendly_name", entry.FriendlyName),
+                zap.String("category", entry.Category))
 
         // Validate category - must be one of the allowed Enum values
         validCategories := map[string]bool{
@@ -747,7 +757,7 @@ func updateProcessCatalogHandler(c *gin.Context) {
                 "communication": true, "entertainment": true,
         }
         if !validCategories[entry.Category] {
-                log.Printf("Invalid category '%s', defaulting to 'neutral'", entry.Category)
+                zapctx.Warn(ctx, "Invalid category, defaulting to neutral", zap.String("category", entry.Category))
                 entry.Category = "neutral"
         }
 
@@ -757,14 +767,13 @@ func updateProcessCatalogHandler(c *gin.Context) {
                 entry.CreatedAt = time.Now() // Fallback if not provided
         }
 
-        ctx := c.Request.Context()
         if err := db.UpdateProcessCatalogEntry(ctx, entry); err != nil {
-                log.Printf("Failed to update process catalog entry: %v", err)
+                zapctx.Error(ctx, "Failed to update process catalog entry", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update: " + err.Error()})
                 return
         }
 
-        log.Printf("Process catalog entry updated: id=%s", entry.ID)
+        zapctx.Info(ctx, "Process catalog entry updated", zap.String("id", entry.ID))
         c.JSON(http.StatusOK, entry)
 }
 
@@ -777,10 +786,11 @@ func deleteProcessCatalogHandler(c *gin.Context) {
 
         ctx := c.Request.Context()
         if err := db.DeleteProcessCatalogEntry(ctx, id); err != nil {
-                log.Printf("Failed to delete process catalog entry: %v", err)
+                zapctx.Error(ctx, "Failed to delete process catalog entry", zap.Error(err))
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
                 return
         }
 
+        zapctx.Info(ctx, "Process catalog entry deleted", zap.String("id", id))
         c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
