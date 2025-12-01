@@ -790,6 +790,14 @@ func (db *Database) GetDailyReport(ctx context.Context, username string, date ti
         }
         report.ApplicationTimeline = appTimeline
 
+        // Get chronological activity periods (9:03-9:29 1C, 9:29-9:39 Idle, etc.)
+        activityPeriods, err := db.GetActivityPeriods(ctx, username, startOfDay, endOfDay)
+        if err != nil {
+                zapctx.Warn(ctx, "Failed to get activity periods", zap.Error(err))
+                activityPeriods = make([]ActivityPeriod, 0)
+        }
+        report.ActivityPeriods = activityPeriods
+
         // Get screenshots
         screenshots, err := db.GetScreenshotsByUsername(ctx, username, startOfDay, endOfDay)
         if err != nil {

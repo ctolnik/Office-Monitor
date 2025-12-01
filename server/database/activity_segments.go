@@ -306,3 +306,150 @@ func getFriendlyNameFromCatalog(processName string, catalog []ProcessCatalogEntr
         // Return process name without .exe as fallback
         return strings.TrimSuffix(processName, ".exe")
 }
+
+// GetActivityPeriods returns chronological activity periods for user
+// Groups consecutive segments of the same type into periods
+// Example output: "9:03-9:29 Worked in 1C", "9:29-9:39 Idle", "9:39-10:00 Chrome"
+func (db *Database) GetActivityPeriods(ctx context.Context, username string, start, end time.Time) ([]ActivityPeriod, error) {
+        // Get all segments sorted by time
+        segments, err := db.GetActivitySegmentsByUsername(ctx, username, start, end)
+        if err != nil {
+                return nil, err
+        }
+
+        if len(segments) == 0 {
+                return []ActivityPeriod{}, nil
+        }
+
+        // Load process catalog for friendly names
+        processCatalog, _ := db.GetProcessCatalog(ctx)
+
+        periods := make([]ActivityPeriod, 0)
+        var currentPeriod *ActivityPeriod
+        windowTitlesSet := make(map[string]bool)
+
+        for _, seg := range segments {
+                // Determine the grouping key: for active state use process, for idle/offline use state
+                var groupKey string
+                if seg.State == "active" {
+                        groupKey = seg.ProcessName
+                } else {
+                        groupKey = seg.State // idle or offline
+                }
+
+                // Check if we should start a new period
+                startNewPeriod := currentPeriod == nil ||
+                        (seg.State == "active" && currentPeriod.ProcessName != seg.ProcessName) ||
+                        (seg.State != "active" && currentPeriod.State != seg.State)
+
+                if startNewPeriod {
+                        // Save previous period
+                        if currentPeriod != nil {
+                                // Convert window titles set to slice
+                                titles := make([]string, 0, len(windowTitlesSet))
+                                for title := range windowTitlesSet {
+                                        if title != "" {
+                                                titles = append(titles, title)
+                                        }
+                                }
+                                currentPeriod.WindowTitles = titles
+                                currentPeriod.Description = buildPeriodDescription(currentPeriod, processCatalog)
+                                periods = append(periods, *currentPeriod)
+                        }
+
+                        // Start new period
+                        friendlyName := ""
+                        category := seg.Category
+                        if seg.State == "active" {
+                                friendlyName = getFriendlyNameFromCatalog(seg.ProcessName, processCatalog)
+                                if category == "" {
+                                        category = matchProcessToCatalogInternal(seg.ProcessName, processCatalog)
+                                }
+                        } else {
+                                category = seg.State // idle or offline
+                        }
+
+                        currentPeriod = &ActivityPeriod{
+                                Start:        seg.TimestampStart.Format(time.RFC3339),
+                                End:          seg.TimestampEnd.Format(time.RFC3339),
+                                DurationSec:  seg.DurationSec,
+                                State:        seg.State,
+                                ProcessName:  seg.ProcessName,
+                                FriendlyName: friendlyName,
+                                Category:     category,
+                        }
+                        windowTitlesSet = make(map[string]bool)
+                        if seg.WindowTitle != "" {
+                                windowTitlesSet[seg.WindowTitle] = true
+                        }
+                } else {
+                        // Extend current period
+                        currentPeriod.End = seg.TimestampEnd.Format(time.RFC3339)
+                        currentPeriod.DurationSec += seg.DurationSec
+                        if seg.WindowTitle != "" {
+                                windowTitlesSet[seg.WindowTitle] = true
+                        }
+                }
+
+                _ = groupKey // used for documentation
+        }
+
+        // Don't forget the last period
+        if currentPeriod != nil {
+                titles := make([]string, 0, len(windowTitlesSet))
+                for title := range windowTitlesSet {
+                        if title != "" {
+                                titles = append(titles, title)
+                        }
+                }
+                currentPeriod.WindowTitles = titles
+                currentPeriod.Description = buildPeriodDescription(currentPeriod, processCatalog)
+                periods = append(periods, *currentPeriod)
+        }
+
+        zapctx.Info(ctx, "GetActivityPeriods result",
+                zap.String("username", username),
+                zap.Int("periods_count", len(periods)))
+
+        return periods, nil
+}
+
+// buildPeriodDescription creates human-readable description for a period
+func buildPeriodDescription(period *ActivityPeriod, catalog []ProcessCatalogEntry) string {
+        // Format duration
+        durationStr := formatDuration(period.DurationSec)
+
+        switch period.State {
+        case "idle":
+                return fmt.Sprintf("Простой (%s)", durationStr)
+        case "offline":
+                return fmt.Sprintf("Отключен (%s)", durationStr)
+        default:
+                appName := period.FriendlyName
+                if appName == "" {
+                        appName = strings.TrimSuffix(period.ProcessName, ".exe")
+                }
+                return fmt.Sprintf("Работал в %s (%s)", appName, durationStr)
+        }
+}
+
+// formatDuration formats seconds into human-readable string
+func formatDuration(seconds uint32) string {
+        if seconds < 60 {
+                return fmt.Sprintf("%d сек", seconds)
+        }
+        if seconds < 3600 {
+                mins := seconds / 60
+                secs := seconds % 60
+                if secs > 0 {
+                        return fmt.Sprintf("%d мин %d сек", mins, secs)
+                }
+                return fmt.Sprintf("%d мин", mins)
+        }
+        hours := seconds / 3600
+        mins := (seconds % 3600) / 60
+        if mins > 0 {
+                return fmt.Sprintf("%d ч %d мин", hours, mins)
+        }
+        return fmt.Sprintf("%d ч", hours)
+}

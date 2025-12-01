@@ -246,23 +246,24 @@ type AlertFull struct {
 }
 
 type DailyReport struct {
-        Date               string                `json:"date"`
-        ComputerName       string                `json:"computer_name"`
-        Username           string                `json:"username"`
-        TotalActiveTime    uint64                `json:"total_active_time"`
-        TotalIdleTime      uint64                `json:"total_idle_time"`
-        ProductivityScore  float64               `json:"productivity_score"`
-        Applications       []ApplicationUsage    `json:"applications"`
+        Date                string                `json:"date"`
+        ComputerName        string                `json:"computer_name"`
+        Username            string                `json:"username"`
+        TotalActiveTime     uint64                `json:"total_active_time"`
+        TotalIdleTime       uint64                `json:"total_idle_time"`
+        ProductivityScore   float64               `json:"productivity_score"`
+        Applications        []ApplicationUsage    `json:"applications"`
         ApplicationTimeline []ApplicationTimeline `json:"application_timeline"` // When each app was used
-        Screenshots        []ScreenshotMetadata  `json:"screenshots"`
-        KeyboardActivity   []KeyboardPeriod      `json:"keyboard_activity"`
-        KeyboardPeriods    []KeyboardPeriod      `json:"keyboard_periods"`
-        ActivityEvents     []ActivityEvent       `json:"activity_events"`
-        FileEvents         []FileCopyEvent       `json:"file_events"`
-        USBEvents          []USBEvent            `json:"usb_events"`
-        Alerts             []AlertFull           `json:"alerts"`
-        DLPAlerts          []AlertFull           `json:"dlp_alerts"`
-        Summary            ActivitySummary       `json:"summary"`
+        ActivityPeriods     []ActivityPeriod      `json:"activity_periods"`     // Chronological timeline: "9:03-9:29 1C, 9:29-9:39 Idle"
+        Screenshots         []ScreenshotMetadata  `json:"screenshots"`
+        KeyboardActivity    []KeyboardPeriod      `json:"keyboard_activity"`
+        KeyboardPeriods     []KeyboardPeriod      `json:"keyboard_periods"`
+        ActivityEvents      []ActivityEvent       `json:"activity_events"`
+        FileEvents          []FileCopyEvent       `json:"file_events"`
+        USBEvents           []USBEvent            `json:"usb_events"`
+        Alerts              []AlertFull           `json:"alerts"`
+        DLPAlerts           []AlertFull           `json:"dlp_alerts"`
+        Summary             ActivitySummary       `json:"summary"`
 }
 
 type ActivitySummary struct {
@@ -307,4 +308,18 @@ type ImportResult struct {
         Failed    int           `json:"failed"`
         TotalRows int           `json:"total_rows"`
         Errors    []ImportError `json:"errors,omitempty"`
+}
+
+// ActivityPeriod represents a chronological period of user activity
+// Used for timeline display: "9:03-9:29 Worked in 1C", "9:29-9:39 Idle", etc.
+type ActivityPeriod struct {
+        Start        string   `json:"start"`         // ISO timestamp (start of period)
+        End          string   `json:"end"`           // ISO timestamp (end of period)
+        DurationSec  uint32   `json:"duration_sec"`  // Duration in seconds
+        State        string   `json:"state"`         // active, idle, offline
+        ProcessName  string   `json:"process_name"`  // Process name (for active state)
+        FriendlyName string   `json:"friendly_name"` // Human-readable app name
+        Category     string   `json:"category"`      // productive, unproductive, neutral, etc.
+        WindowTitles []string `json:"window_titles"` // Unique window titles during this period
+        Description  string   `json:"description"`   // Human-readable description: "Worked in 1C"
 }
