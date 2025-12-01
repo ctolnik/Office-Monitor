@@ -40,3 +40,4 @@ server/monitoring-server
 server/server
 server/monitoring.db
 server/logs/
+attached_assets/
