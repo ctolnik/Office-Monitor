@@ -1,0 +1,45 @@
+ilya@docker-01:/opt/Office-Monitor$ docker ps
+CONTAINER ID   IMAGE                                      COMMAND                  CREATED              STATUS                        PORTS                                                                                                NAMES
+c5de3d5f960a   nginx:alpine                               "/docker-entrypoint.…"   About a minute ago   Up About a minute (healthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp                                                                  monitoring-nginx
+f053ecde37e4   office-monitor_frontend                    "/docker-entrypoint.…"   About a minute ago   Up About a minute             80/tcp                                                                                               monitoring-frontend
+1dfb1c89dfda   office-monitor_server                      "./monitoring-server"    About a minute ago   Up About a minute             0.0.0.0:8081->8080/tcp, [::]:8081->8080/tcp                                                          monitoring-server
+f3b0be7ff7e2   clickhouse/clickhouse-server:25.9          "/entrypoint.sh"         About a minute ago   Up About a minute (healthy)   0.0.0.0:8123->8123/tcp, [::]:8123->8123/tcp, 0.0.0.0:9000->9000/tcp, [::]:9000->9000/tcp, 9009/tcp   monitoring-clickhouse
+0f554164ef3e   minio/minio:RELEASE.2025-09-07T16-13-09Z   "/usr/bin/docker-ent…"   About a minute ago   Up About a minute (healthy)   0.0.0.0:9002->9000/tcp, [::]:9002->9000/tcp, 0.0.0.0:9101->9001/tcp, [::]:9101->9001/tcp             monitoring-minio
+839a65577a2d   uibmz/opsi-server:4.3                      "/bin/sh -c /entrypo…"   8 days ago           Up 8 days                     0.0.0.0:69->69/udp, [::]:69->69/udp, 0.0.0.0:4447->4447/tcp, [::]:4447->4447/tcp                     opsi-server_opsi-server_1
+5da4c8253cb3   grafana/grafana:latest                     "/run.sh"                8 days ago           Up 8 days                     3000/tcp                                                                                             opsi-server_grafana_1
+bc6934978472   mariadb:10.7                               "docker-entrypoint.s…"   8 days ago           Up 8 days                     3306/tcp                                                                                             opsi-server_mysql_1
+e4ea36011be4   redis/redis-stack-server:latest            "sh -c 'redis-server…"   8 days ago           Up 8 days                     6379/tcp                                                                                             opsi-server_redis_1
+1908b65d9194   grafana/grafana:latest                     "/run.sh"                2 weeks ago          Up 2 weeks (healthy)          0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp                                                          grafana
+a0e5d14615a0   prom/prometheus:v3.7.0                     "/bin/prometheus --c…"   2 weeks ago          Up 8 days (healthy)           0.0.0.0:9090->9090/tcp, [::]:9090->9090/tcp                                                          prometheus
+dc3a2192aa98   pryorda/vmware_exporter:latest             "/usr/local/bin/vmwa…"   2 weeks ago          Up 2 weeks                    0.0.0.0:9272->9272/tcp, [::]:9272->9272/tcp                                                          prometheus_stack_vmware_exporter_1
+f26bd2aa64e3   prom/pushgateway:latest                    "/bin/pushgateway"       2 weeks ago          Up 2 weeks (healthy)          0.0.0.0:9091->9091/tcp, [::]:9091->9091/tcp                                                          pushgateway
+f5242b3d369d   prom/blackbox-exporter:v0.27.0             "/bin/blackbox_expor…"   2 weeks ago          Up 2 weeks (healthy)          0.0.0.0:9115->9115/tcp, [::]:9115->9115/tcp                                                          blackbox
+471d17f38cec   prom/snmp-exporter:v0.29.0                 "/bin/snmp_exporter …"   2 weeks ago          Up 2 weeks (healthy)          0.0.0.0:9116->9116/tcp, [::]:9116->9116/tcp                                                          snmp-exporter
+4ef3ceb7dc0c   tg-bot-vpn_gsl-audit-bot                   "python -m src.bot_w…"   4 weeks ago          Up 4 weeks (healthy)          0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp                                                          gsl-audit-bot
+3b664415ef33   atlassian/jira-software:10.3.6             "/usr/bin/tini -- /e…"   4 weeks ago          Up 4 weeks                    8080/tcp                                                                                             jira
+ae12504539df   postgres:15.13                             "docker-entrypoint.s…"   4 weeks ago          Up 4 weeks                    0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp                                                          jira_db_1
+bd5e715cade5   nginx:alpine                               "/docker-entrypoint.…"   4 weeks ago          Up 4 weeks                    80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp                                                      nginx
+ilya@docker-01:/opt/Office-Monitor$ docker exec -it f3b0be7ff7e2 clickhouse-client -q \
+  "SELECT process_name, category, timestamp_start FROM monitoring.activity_segments ORDER BY timestamp_start DESC LIMIT 10"
+unknown neutral 2025-12-01 02:58:34.000
+ScreenClippingHost.exe  neutral 2025-12-01 02:58:04.000
+MobaXterm.exe   neutral 2025-12-01 02:56:04.000
+unknown neutral 2025-12-01 02:55:34.000
+unknown neutral 2025-12-01 02:53:04.000
+unknown neutral 2025-12-01 02:28:04.000
+unknown neutral 2025-12-01 02:23:04.000
+chrome.exe      neutral 2025-12-01 02:22:34.000
+MobaXterm.exe   neutral 2025-12-01 02:21:04.000
+unknown neutral 2025-12-01 02:20:04.000
+ilya@docker-01:/opt/Office-Monitor$ docker-compose logs server --tail=100 | grep -i "category\|catalog\|match"
+ERROR: No such service: --tail=100
+ilya@docker-01:/opt/Office-Monitor$ docker-compose logs server  | grep -i "category\|catalog\|match"
+monitoring-server | {"ts":"2025-12-01T02:57:40.314+0300","msg":"🔄 Auto-syncing process_catalog table schema..."}
+monitoring-server | {"ts":"2025-12-01T02:57:40.315+0300","msg":"✅ process_catalog table schema is up to date"}
+monitoring-server | {"ts":"2025-12-01T02:57:57.926+0300","msg":"Process catalog fetched","count":3}
+monitoring-server | {"ts":"2025-12-01T02:57:57.945+0300","msg":"Process catalog fetched","count":3}
+monitoring-server | {"ts":"2025-12-01T02:57:57.945+0300","msg":"Process catalog loaded for matching","entries":3}
+monitoring-server | {"ts":"2025-12-01T02:57:57.949+0300","msg":"Application categories retrieved","count":11,"category_filter":"","search":""}
+monitoring-server | {"ts":"2025-12-01T02:57:57.955+0300","msg":"Process catalog fetched","count":3}
+monitoring-server | {"ts":"2025-12-01T02:57:57.970+0300","msg":"🔵 First application","process":"MobaXterm.exe","duration":411,"category":"neutral"}
+ilya@docker-01:/opt/Office-Monitor$
