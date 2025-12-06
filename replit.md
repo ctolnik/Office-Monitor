@@ -48,3 +48,18 @@ Currently, no authentication layer is implemented, assuming deployment within a 
     - ClickHouse Go driver
     - MinIO Go SDK
 - **No External Services**: The system is self-contained and designed for on-premise deployment, utilizing ClickHouse and MinIO as local services (via `docker-compose.yml`).
+
+### Grafana Analytics (Added December 2025)
+
+The system includes Grafana dashboards for advanced analytics and reporting:
+- **Location**: `grafana/` directory with provisioning configs and dashboard JSON
+- **Access**: Port 3000, default credentials admin/admin
+- **Datasource**: ClickHouse via `grafana-clickhouse-datasource` plugin
+- **Dashboard "Активность сотрудника"** includes:
+  - Stat panels: active time, idle time, productive time, app count
+  - Pie charts: time by applications (with friendly names), time by categories
+  - Bar chart: top applications by usage
+  - Table: chronological activity timeline with window titles
+  - Time series: hourly activity breakdown
+  - Variable `$employee` for employee selection
+- **SQL Views**: `clickhouse/03-grafana-views.sql` contains helper views for Grafana queries
