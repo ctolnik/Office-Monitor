@@ -115,30 +115,6 @@ services:
       - monitoring-network
     restart: unless-stopped
 
-  # Grafana - dashboards and analytics
-  grafana:
-    image: grafana/grafana:11.3.0
-    container_name: monitoring-grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    environment:
-      TZ: Europe/Moscow
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change_me_in_production}
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-    networks:
-      - monitoring-network
-    restart: unless-stopped
-
   # Nginx reverse proxy
   nginx:
     image: nginx:alpine
@@ -170,7 +146,5 @@ volumes:
   clickhouse_data:
     driver: local
   minio_data:
-    driver: local
-  grafana_data:
     driver: local
 ...
