@@ -131,12 +131,27 @@ func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, change
                 return true
         }
 
+        allSessions := monitoring.EnumerateAllUserSessions()
+        log.Printf("Found %d user sessions at startup", len(allSessions))
+        for _, sess := range allSessions {
+                stateStr := "Unknown"
+                switch sess.State {
+                case 0:
+                        stateStr = "Active"
+                case 1:
+                        stateStr = "Connected"
+                case 4:
+                        stateStr = "Disconnected"
+                }
+                log.Printf("  Session %d: user=%s, state=%s(%d)", sess.SessionID, sess.Username, stateStr, sess.State)
+        }
+
         username, sessionID := monitoring.GetActiveSessionInfo()
         if username != "" && username != "SYSTEM" && sessionID > 0 {
-                log.Printf("User: %s (session %d)", username, sessionID)
+                log.Printf("Selected session for monitoring: user=%s, session=%d", username, sessionID)
                 startMonitoringForSession(sessionID)
         } else {
-                log.Println("Waiting for user logon...")
+                log.Println("No active user session found, waiting for user logon...")
         }
 
 loop:
