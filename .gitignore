@@ -34,7 +34,6 @@ server/main
 server/config.yaml
 .DS_Store
 WARP.md
-/docs
 frontend
 server/monitoring-server
 server/server
