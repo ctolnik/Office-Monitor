@@ -5,9 +5,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/ctolnik/Office-Monitor/agent/buffer"
 	"github.com/ctolnik/Office-Monitor/agent/config"
@@ -20,32 +23,77 @@ import (
 
 const serviceName = "OfficeMonitorAgent"
 
+const (
+	WTS_CONSOLE_CONNECT    = 0x1
+	WTS_CONSOLE_DISCONNECT = 0x2
+	WTS_REMOTE_CONNECT     = 0x3
+	WTS_REMOTE_DISCONNECT  = 0x4
+	WTS_SESSION_LOGON      = 0x5
+	WTS_SESSION_LOGOFF     = 0x6
+	WTS_SESSION_LOCK       = 0x7
+	WTS_SESSION_UNLOCK     = 0x8
+)
+
+type WTSSESSION_NOTIFICATION struct {
+	Size      uint32
+	SessionID uint32
+}
+
+func getSessionIDFromEvent(eventData uintptr) uint32 {
+	if eventData == 0 {
+		return 0
+	}
+	notification := (*WTSSESSION_NOTIFICATION)(unsafe.Pointer(eventData))
+	return notification.SessionID
+}
+
 type agentService struct {
 	configPath string
 }
 
 type serviceLogger struct {
-	elog *eventlog.Log
+	elog     *eventlog.Log
+	mu       sync.Mutex
+	inLog    bool
 }
 
 func (l *serviceLogger) Info(msg string) {
 	log.Println(msg)
-	if l.elog != nil {
-		l.elog.Info(1001, msg)
-	}
+	l.writeEvent(1001, msg, "info")
 }
 
 func (l *serviceLogger) Error(msg string) {
 	log.Println("ERROR: " + msg)
-	if l.elog != nil {
-		l.elog.Error(1002, msg)
-	}
+	l.writeEvent(1002, msg, "error")
 }
 
 func (l *serviceLogger) Warning(msg string) {
 	log.Println("WARNING: " + msg)
-	if l.elog != nil {
-		l.elog.Warning(1003, msg)
+	l.writeEvent(1003, msg, "warning")
+}
+
+func (l *serviceLogger) writeEvent(id uint32, msg, level string) {
+	l.mu.Lock()
+	if l.inLog || l.elog == nil {
+		l.mu.Unlock()
+		return
+	}
+	l.inLog = true
+	l.mu.Unlock()
+
+	defer func() {
+		l.mu.Lock()
+		l.inLog = false
+		l.mu.Unlock()
+	}()
+
+	switch level {
+	case "info":
+		l.elog.Info(id, msg)
+	case "error":
+		l.elog.Error(id, msg)
+	case "warning":
+		l.elog.Warning(id, msg)
 	}
 }
 
@@ -60,14 +108,9 @@ func checkServerAvailability(serverURL string) error {
 }
 
 func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
-	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
-
 	changes <- svc.Status{State: svc.StartPending}
 
-	elog, err := eventlog.Open(serviceName)
-	if err != nil {
-		log.Printf("Failed to open event log: %v", err)
-	}
+	elog, _ := eventlog.Open(serviceName)
 	defer func() {
 		if elog != nil {
 			elog.Close()
@@ -77,32 +120,28 @@ func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, change
 	slog := &serviceLogger{elog: elog}
 
 	slog.Info("Service starting...")
-	slog.Info("Loading configuration from: " + s.configPath)
 
 	cfg, err := config.Load(s.configPath)
 	if err != nil {
 		slog.Error("Failed to load config: " + err.Error())
 		changes <- svc.Status{State: svc.StopPending}
-		return false, 1
+		return false, 0
 	}
-	slog.Info("Configuration loaded successfully")
-	slog.Info("Computer name: " + cfg.Agent.ComputerName)
-	slog.Info("Server URL: " + cfg.Agent.Server.URL)
+	slog.Info("Config loaded: " + cfg.Agent.ComputerName)
 
 	if cfg.Logging.File != "" {
 		if err := logger.Init(cfg.Logging.File); err != nil {
-			slog.Error("Failed to initialize file logging: " + err.Error())
-		} else {
-			slog.Info("File logging enabled: " + cfg.Logging.File)
+			slog.Warning("File logging failed: " + err.Error())
 		}
 	}
 
 	if err := checkServerAvailability(cfg.Agent.Server.URL); err != nil {
-		slog.Warning("Server check: " + err.Error())
+		slog.Warning("Server unavailable: " + err.Error())
 	} else {
-		slog.Info("Server is available")
+		slog.Info("Server available")
 	}
 
+	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptSessionChange
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 
 	var m *monitors
@@ -111,16 +150,13 @@ func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, change
 
 	username := monitoring.GetActiveSessionUsername()
 	if username != "" && username != "SYSTEM" {
-		slog.Info("Active user: " + username)
+		slog.Info("User: " + username)
 		_, cancel, m = s.startMonitoring(cfg, username, slog)
 		monitoringStarted = true
-		slog.Info("Service is fully operational")
+		slog.Info("Monitoring started")
 	} else {
-		slog.Info("No active user, waiting for logon (polling every 10s)...")
+		slog.Info("Waiting for user logon...")
 	}
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
 
 loop:
 	for {
@@ -129,35 +165,61 @@ loop:
 			switch c.Cmd {
 			case svc.Interrogate:
 				changes <- c.CurrentStatus
-			case svc.Stop, svc.Shutdown:
-				slog.Info("Shutdown requested")
-				break loop
-			}
 
-		case <-ticker.C:
-			if !monitoringStarted {
-				username = monitoring.GetActiveSessionUsername()
-				if username != "" && username != "SYSTEM" {
-					slog.Info("User logon detected: " + username)
-					_, cancel, m = s.startMonitoring(cfg, username, slog)
-					monitoringStarted = true
-					slog.Info("Service is fully operational")
+			case svc.Stop, svc.Shutdown:
+				slog.Info("Shutdown")
+				break loop
+
+			case svc.SessionChange:
+				sessionID := getSessionIDFromEvent(c.EventData)
+				
+				switch c.EventType {
+				case WTS_SESSION_LOGON:
+					slog.Info(fmt.Sprintf("Logon session %d", sessionID))
+					if !monitoringStarted {
+						username = monitoring.GetActiveSessionUsername()
+						if username != "" && username != "SYSTEM" {
+							slog.Info("User: " + username)
+							_, cancel, m = s.startMonitoring(cfg, username, slog)
+							monitoringStarted = true
+							slog.Info("Monitoring started")
+						}
+					}
+
+				case WTS_SESSION_LOGOFF:
+					slog.Info(fmt.Sprintf("Logoff session %d", sessionID))
+
+				case WTS_SESSION_LOCK:
+					slog.Info(fmt.Sprintf("Lock session %d", sessionID))
+
+				case WTS_SESSION_UNLOCK:
+					slog.Info(fmt.Sprintf("Unlock session %d", sessionID))
+
+				case WTS_CONSOLE_CONNECT, WTS_REMOTE_CONNECT:
+					if !monitoringStarted {
+						username = monitoring.GetActiveSessionUsername()
+						if username != "" && username != "SYSTEM" {
+							slog.Info("User: " + username)
+							_, cancel, m = s.startMonitoring(cfg, username, slog)
+							monitoringStarted = true
+							slog.Info("Monitoring started")
+						}
+					}
 				}
 			}
 		}
 	}
 
 	changes <- svc.Status{State: svc.StopPending}
-	slog.Info("Stopping service...")
 
 	if monitoringStarted && m != nil {
-		stopMonitors(m, slog)
+		stopMonitors(m)
 		if cancel != nil {
 			cancel()
 		}
 	}
 
-	slog.Info("Service stopped")
+	slog.Info("Stopped")
 	return false, 0
 }
 
@@ -187,7 +249,7 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, slog
 		BufferDir: "buffer",
 	})
 	if err != nil {
-		slog.Error("Failed to create event buffer: " + err.Error())
+		slog.Error("Buffer error: " + err.Error())
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -207,11 +269,7 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, slog
 			idleThresholdMin,
 			cfg.ActivityMonitoring.IntervalSeconds,
 		)
-		if err := m.activityTracker.Start(); err != nil {
-			slog.Error("Activity tracking failed: " + err.Error())
-		} else {
-			slog.Info("Activity tracking: ENABLED")
-		}
+		m.activityTracker.Start()
 	}
 
 	if cfg.USBMonitoring.Enabled {
@@ -225,11 +283,7 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, slog
 			cfg.USBMonitoring.ExcludePatterns,
 			m.eventBuffer,
 		)
-		if err := m.usbMonitor.Start(); err != nil {
-			slog.Error("USB monitoring failed: " + err.Error())
-		} else {
-			slog.Info("USB monitoring: ENABLED")
-		}
+		m.usbMonitor.Start()
 	}
 
 	if cfg.Screenshots.Enabled {
@@ -244,11 +298,7 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, slog
 			cfg.Screenshots.UploadImmediately,
 			httpClient,
 		)
-		if err := m.screenshotMonitor.Start(); err != nil {
-			slog.Error("Screenshot capture failed: " + err.Error())
-		} else {
-			slog.Info("Screenshot capture: ENABLED")
-		}
+		m.screenshotMonitor.Start()
 	}
 
 	if cfg.FileMonitoring.Enabled {
@@ -262,11 +312,7 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, slog
 			cfg.FileMonitoring.DetectExternalCopy,
 			m.eventBuffer,
 		)
-		if err := m.fileMonitor.Start(); err != nil {
-			slog.Error("File monitoring failed: " + err.Error())
-		} else {
-			slog.Info("File monitoring: ENABLED")
-		}
+		m.fileMonitor.Start()
 	}
 
 	if cfg.Keylogger.Enabled {
@@ -279,17 +325,13 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, slog
 			cfg.Keylogger.SendIntervalMin,
 			m.eventBuffer,
 		)
-		if err := m.keylogger.Start(); err != nil {
-			slog.Error("Keylogger failed: " + err.Error())
-		} else {
-			slog.Info("Keylogger: ENABLED")
-		}
+		m.keylogger.Start()
 	}
 
 	return ctx, cancel, m
 }
 
-func stopMonitors(m *monitors, slog *serviceLogger) {
+func stopMonitors(m *monitors) {
 	if m.activityTracker != nil {
 		m.activityTracker.Stop()
 	}
@@ -308,7 +350,6 @@ func stopMonitors(m *monitors, slog *serviceLogger) {
 	if m.eventBuffer != nil {
 		m.eventBuffer.Stop()
 	}
-	slog.Info("All monitors stopped")
 }
 
 func getSessionUsername() string {
