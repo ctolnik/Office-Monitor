@@ -142,6 +142,12 @@ func (h *HelperProcess) StartInUserSession(sessionID uint32, username string) er
                 return fmt.Errorf("CreateProcessAsUserW failed: %v", err)
         }
 
+        // Close thread handle immediately - we don't need it
+        if processInfo.Thread != 0 {
+                windows.CloseHandle(processInfo.Thread)
+                processInfo.Thread = 0
+        }
+
         h.processInfo = &processInfo
         h.running = true
 
@@ -161,11 +167,8 @@ func (h *HelperProcess) Stop() error {
         handle := h.processInfo.Process
         if handle != 0 {
                 windows.TerminateProcess(handle, 0)
+                windows.WaitForSingleObject(handle, 5000) // Wait up to 5 seconds
                 windows.CloseHandle(handle)
-        }
-
-        if h.processInfo.Thread != 0 {
-                windows.CloseHandle(h.processInfo.Thread)
         }
 
         h.processInfo = nil
@@ -185,6 +188,7 @@ func (h *HelperProcess) IsRunning() bool {
 
         handle := h.processInfo.Process
         if handle == 0 {
+                h.running = false
                 return false
         }
 
@@ -194,13 +198,11 @@ func (h *HelperProcess) IsRunning() bool {
                 return false
         }
 
+        // STILL_ACTIVE = 259
         if exitCode != 259 {
-                h.running = false
                 windows.CloseHandle(handle)
-                if h.processInfo.Thread != 0 {
-                        windows.CloseHandle(h.processInfo.Thread)
-                }
                 h.processInfo = nil
+                h.running = false
                 return false
         }
 

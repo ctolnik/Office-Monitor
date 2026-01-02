@@ -40,8 +40,11 @@
 ```
 C:\Program Files\OfficeMonitor\
 ├── employee-agent.exe
+├── screenshot-helper.exe   # Для захвата скриншотов
 └── config.yaml
 ```
+
+**Примечание:** `screenshot-helper.exe` — отдельный процесс, который запускается службой в сессии пользователя для захвата экрана. Это необходимо, так как Windows Service работает в изолированной Session 0 и не имеет доступа к интерактивному рабочему столу.
 
 ### 2. Создать config.yaml
 
