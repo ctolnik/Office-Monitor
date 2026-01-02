@@ -5,11 +5,9 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
 	"github.com/ctolnik/Office-Monitor/agent/buffer"
 	"github.com/ctolnik/Office-Monitor/agent/config"
@@ -17,51 +15,64 @@ import (
 	"github.com/ctolnik/Office-Monitor/agent/logger"
 	"github.com/ctolnik/Office-Monitor/agent/monitoring"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 )
 
-var (
-	configPath = flag.String("config", "config.yaml", "Path to config file")
-	version    = "1.1.0"
-)
+const serviceName = "OfficeMonitorAgent"
 
-func main() {
-	flag.Parse()
-
-	isService, err := svc.IsWindowsService()
-	if err != nil {
-		log.Fatalf("Failed to determine if running as service: %v", err)
-	}
-
-	if isService {
-		if err := runService(*configPath); err != nil {
-			log.Fatalf("Service failed: %v", err)
-		}
-		return
-	}
-
-	runInteractive(*configPath)
+type agentService struct {
+	configPath string
 }
 
-func runInteractive(configPath string) {
-	log.Printf("Employee Monitoring Agent v%s starting (interactive mode)...", version)
+func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 
-	cfg, err := config.Load(configPath)
+	changes <- svc.Status{State: svc.StartPending}
+
+	elog, err := eventlog.Open(serviceName)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Printf("Failed to open event log: %v", err)
+	}
+	defer func() {
+		if elog != nil {
+			elog.Close()
+		}
+	}()
+
+	logInfo := func(msg string) {
+		log.Println(msg)
+		if elog != nil {
+			elog.Info(1, msg)
+		}
+	}
+
+	logError := func(msg string) {
+		log.Println("ERROR: " + msg)
+		if elog != nil {
+			elog.Error(1, msg)
+		}
+	}
+
+	logInfo("Loading configuration...")
+
+	cfg, err := config.Load(s.configPath)
+	if err != nil {
+		logError("Failed to load config: " + err.Error())
+		changes <- svc.Status{State: svc.StopPending}
+		return false, 1
 	}
 
 	if cfg.Logging.File != "" {
 		if err := logger.Init(cfg.Logging.File); err != nil {
-			log.Printf("WARNING: Failed to initialize file logging: %v", err)
-			log.Println("Continuing with console logging only")
+			logError("Failed to initialize file logging: " + err.Error())
 		} else {
-			log.Printf("Logging to file: %s", cfg.Logging.File)
+			logInfo("Logging to file: " + cfg.Logging.File)
 		}
 	}
 
-	username := os.Getenv("USERNAME")
-	log.Printf("Computer: %s, User: %s", cfg.Agent.ComputerName, username)
-	log.Printf("Server: %s", cfg.Agent.Server.URL)
+	username := getSessionUsername()
+	logInfo("Computer: " + cfg.Agent.ComputerName + ", User: " + username)
+	logInfo("Server: " + cfg.Agent.Server.URL)
 
 	httpClient := httpclient.NewClient(httpclient.Config{
 		ServerURL:      cfg.Agent.Server.URL,
@@ -76,7 +87,9 @@ func runInteractive(configPath string) {
 		BufferDir: "buffer",
 	})
 	if err != nil {
-		log.Fatalf("Failed to create event buffer: %v", err)
+		logError("Failed to create event buffer: " + err.Error())
+		changes <- svc.Status{State: svc.StopPending}
+		return false, 1
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -97,13 +110,10 @@ func runInteractive(configPath string) {
 			cfg.ActivityMonitoring.IntervalSeconds,
 		)
 		if err := activityTracker.Start(); err != nil {
-			log.Printf("WARNING: Activity tracking failed to start: %v", err)
+			logError("Activity tracking failed to start: " + err.Error())
 		} else {
-			log.Printf("Activity tracking: ENABLED (idle threshold: %dm, poll interval: %ds)",
-				idleThresholdMin, cfg.ActivityMonitoring.IntervalSeconds)
+			logInfo("Activity tracking: ENABLED")
 		}
-	} else {
-		log.Println("Activity tracking: DISABLED")
 	}
 
 	var usbMonitor *monitoring.USBMonitor
@@ -119,15 +129,10 @@ func runInteractive(configPath string) {
 			eventBuffer,
 		)
 		if err := usbMonitor.Start(); err != nil {
-			log.Printf("WARNING: USB monitoring failed to start: %v", err)
+			logError("USB monitoring failed to start: " + err.Error())
 		} else {
-			log.Println("USB monitoring: ENABLED")
-			if cfg.USBMonitoring.ShadowCopyEnabled {
-				log.Printf("Shadow copy: ENABLED -> %s", cfg.USBMonitoring.ShadowCopyDest)
-			}
+			logInfo("USB monitoring: ENABLED")
 		}
-	} else {
-		log.Println("USB monitoring: DISABLED")
 	}
 
 	var screenshotMonitor *monitoring.ScreenshotMonitor
@@ -144,13 +149,10 @@ func runInteractive(configPath string) {
 			httpClient,
 		)
 		if err := screenshotMonitor.Start(); err != nil {
-			log.Printf("WARNING: Screenshot capture failed to start: %v", err)
+			logError("Screenshot capture failed to start: " + err.Error())
 		} else {
-			log.Printf("Screenshot capture: ENABLED (interval: %dm, quality: %d)",
-				cfg.Screenshots.IntervalMinutes, cfg.Screenshots.Quality)
+			logInfo("Screenshot capture: ENABLED")
 		}
-	} else {
-		log.Println("Screenshot capture: DISABLED")
 	}
 
 	var fileMonitor *monitoring.FileMonitor
@@ -166,21 +168,14 @@ func runInteractive(configPath string) {
 			eventBuffer,
 		)
 		if err := fileMonitor.Start(); err != nil {
-			log.Printf("WARNING: File monitoring failed to start: %v", err)
+			logError("File monitoring failed to start: " + err.Error())
 		} else {
-			log.Println("File monitoring: ENABLED")
-			log.Printf("Monitoring %d locations, thresholds: %dMB / %d files",
-				len(cfg.FileMonitoring.MonitoredLocations),
-				cfg.FileMonitoring.LargeCopyThresholdMB,
-				cfg.FileMonitoring.LargeCopyFileCount)
+			logInfo("File monitoring: ENABLED")
 		}
-	} else {
-		log.Println("File monitoring: DISABLED")
 	}
 
 	var keylogger *monitoring.Keylogger
 	if cfg.Keylogger.Enabled {
-		log.Println("WARNING: Keylogger enabled - ensure legal compliance!")
 		keylogger = monitoring.NewKeylogger(
 			cfg.Agent.Server.URL,
 			cfg.Agent.ComputerName,
@@ -191,21 +186,35 @@ func runInteractive(configPath string) {
 			eventBuffer,
 		)
 		if err := keylogger.Start(); err != nil {
-			log.Printf("WARNING: Keylogger failed to start: %v", err)
+			logError("Keylogger failed to start: " + err.Error())
 		} else {
-			log.Printf("Keylogger: ENABLED (processes: %v)", cfg.Keylogger.MonitoredProcesses)
+			logInfo("Keylogger: ENABLED")
 		}
-	} else {
-		log.Println("Keylogger: DISABLED")
 	}
 
-	log.Println("Agent is running. Press Ctrl+C to stop.")
+	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+	logInfo("Service is running")
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
+loop:
+	for {
+		select {
+		case c := <-r:
+			switch c.Cmd {
+			case svc.Interrogate:
+				changes <- c.CurrentStatus
+				time.Sleep(100 * time.Millisecond)
+				changes <- c.CurrentStatus
+			case svc.Stop, svc.Shutdown:
+				logInfo("Shutdown requested")
+				break loop
+			default:
+				logError("unexpected control request")
+			}
+		}
+	}
 
-	log.Println("Shutting down...")
+	changes <- svc.Status{State: svc.StopPending}
+	logInfo("Stopping service...")
 
 	if activityTracker != nil {
 		activityTracker.Stop()
@@ -226,5 +235,18 @@ func runInteractive(configPath string) {
 	eventBuffer.Stop()
 	cancel()
 
-	log.Println("Agent stopped.")
+	logInfo("Service stopped")
+	return false, 0
+}
+
+func getSessionUsername() string {
+	username := os.Getenv("USERNAME")
+	if username == "" {
+		username = "SYSTEM"
+	}
+	return username
+}
+
+func runService(configPath string) error {
+	return svc.Run(serviceName, &agentService{configPath: configPath})
 }

@@ -53,14 +53,28 @@ logging:
 
 **Примечание:** `api_key` не требуется - сервер не использует аутентификацию (предполагается работа в защищённой внутренней сети). Сотрудник автоматически создаётся на сервере при первом подключении агента по `computer_name`.
 
-### 3. Установить как службу (рекомендуется)
+### 3. Создать папку для логов
+
+```powershell
+New-Item -Path "C:\ProgramData\OfficeMonitor" -ItemType Directory -Force
+```
+
+### 4. Зарегистрировать Event Source (опционально)
+
+Для записи в Windows Event Log:
+
+```powershell
+New-EventLog -LogName Application -Source "OfficeMonitorAgent"
+```
+
+### 5. Установить как службу
 
 Запустите PowerShell от администратора:
 
 ```powershell
-# Создать службу
+# Создать службу с указанием пути к конфигу
 New-Service -Name "OfficeMonitorAgent" `
-  -BinaryPathName "C:\Program Files\OfficeMonitor\employee-agent.exe" `
+  -BinaryPathName '"C:\Program Files\OfficeMonitor\employee-agent.exe" -config "C:\Program Files\OfficeMonitor\config.yaml"' `
   -DisplayName "Office Monitor Agent" `
   -StartupType Automatic `
   -Description "Employee activity monitoring service"
@@ -72,14 +86,19 @@ sc.exe config OfficeMonitorAgent obj= "LocalSystem"
 Start-Service OfficeMonitorAgent
 ```
 
-### 4. Проверить работу
+**Важно:** Агент теперь поддерживает Windows Service API. При запуске как служба он автоматически определяет режим и корректно взаимодействует с SCM (Service Control Manager).
+
+### 6. Проверить работу
 
 ```powershell
 # Статус службы
 Get-Service OfficeMonitorAgent
 
-# Логи
+# Логи агента
 Get-Content "C:\ProgramData\OfficeMonitor\agent.log" -Tail 50
+
+# Windows Event Log
+Get-EventLog -LogName Application -Source "OfficeMonitorAgent" -Newest 10
 ```
 
 ---
@@ -183,8 +202,10 @@ Remove-Item "C:\ProgramData\OfficeMonitor" -Recurse -Force
 ### Агент не запускается
 
 1. Проверьте логи: `C:\ProgramData\OfficeMonitor\agent.log`
-2. Проверьте права доступа к папке
-3. Проверьте синтаксис config.yaml
+2. Проверьте Windows Event Log: `Get-EventLog -LogName Application -Source "OfficeMonitorAgent" -Newest 10`
+3. Проверьте права доступа к папке
+4. Проверьте синтаксис config.yaml
+5. Убедитесь что путь к config.yaml указан в BinaryPathName службы
 
 ### Данные не отправляются
 
