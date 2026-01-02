@@ -40,11 +40,16 @@ CREATE TABLE IF NOT EXISTS monitoring.activity_segments (
     process_name String,
     window_title String,
     session_id String,
+    category String DEFAULT 'neutral',
     event_date Date DEFAULT toDate(timestamp_start)
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(event_date)
 ORDER BY (computer_name, username, timestamp_start)
 TTL event_date + INTERVAL 180 DAY;
+
+-- Migration: add category column if missing
+ALTER TABLE monitoring.activity_segments 
+ADD COLUMN IF NOT EXISTS category String DEFAULT 'neutral' AFTER session_id;
 
 CREATE TABLE IF NOT EXISTS monitoring.keyboard_events (
     timestamp DateTime64(3),
