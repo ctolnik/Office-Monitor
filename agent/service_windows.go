@@ -90,14 +90,51 @@ func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, change
 
         var m *monitors
         var cancel context.CancelFunc
-        monitoringStarted := false
+        var currentSessionID uint32
+        var currentUsername string
+
+        stopCurrentMonitoring := func() {
+                if m != nil {
+                        stopMonitors(m)
+                        m = nil
+                }
+                if cancel != nil {
+                        cancel()
+                        cancel = nil
+                }
+                currentSessionID = 0
+                currentUsername = ""
+        }
+
+        startMonitoringForSession := func(sessionID uint32) bool {
+                if sessionID == 0 {
+                        return false
+                }
+                var username string
+                for attempt := 0; attempt < 5; attempt++ {
+                        username = monitoring.GetSessionUsername(sessionID)
+                        if username != "" && username != "SYSTEM" {
+                                break
+                        }
+                        log.Printf("Session %d: waiting for username (attempt %d/5)", sessionID, attempt+1)
+                        time.Sleep(500 * time.Millisecond)
+                }
+                if username == "" || username == "SYSTEM" {
+                        log.Printf("Session %d: no valid user after retries", sessionID)
+                        return false
+                }
+                log.Printf("Starting monitoring for user: %s (session %d)", username, sessionID)
+                _, cancel, m = s.startMonitoring(cfg, username, sessionID)
+                currentSessionID = sessionID
+                currentUsername = username
+                log.Println("Monitoring started")
+                return true
+        }
 
         username, sessionID := monitoring.GetActiveSessionInfo()
         if username != "" && username != "SYSTEM" && sessionID > 0 {
                 log.Printf("User: %s (session %d)", username, sessionID)
-                _, cancel, m = s.startMonitoring(cfg, username, sessionID)
-                monitoringStarted = true
-                log.Println("Monitoring started")
+                startMonitoringForSession(sessionID)
         } else {
                 log.Println("Waiting for user logon...")
         }
@@ -115,39 +152,52 @@ loop:
                                 break loop
 
                         case svc.SessionChange:
-                                sessionID := getSessionIDFromEvent(c.EventData)
+                                eventSessionID := getSessionIDFromEvent(c.EventData)
 
                                 switch c.EventType {
                                 case WTS_SESSION_LOGON:
-                                        log.Printf("Logon session %d", sessionID)
-                                        if !monitoringStarted {
-                                                username, _ = monitoring.GetActiveSessionInfo()
-                                                if username != "" && username != "SYSTEM" {
-                                                        log.Printf("User: %s (session %d)", username, sessionID)
-                                                        _, cancel, m = s.startMonitoring(cfg, username, sessionID)
-                                                        monitoringStarted = true
-                                                        log.Println("Monitoring started")
+                                        log.Printf("Logon session %d (current: %d)", eventSessionID, currentSessionID)
+                                        if eventSessionID > 0 {
+                                                if currentSessionID != 0 && eventSessionID != currentSessionID {
+                                                        log.Printf("New user logging in, stopping monitoring for session %d", currentSessionID)
+                                                        stopCurrentMonitoring()
+                                                }
+                                                if currentSessionID == 0 {
+                                                        startMonitoringForSession(eventSessionID)
                                                 }
                                         }
 
                                 case WTS_SESSION_LOGOFF:
-                                        log.Printf("Logoff session %d", sessionID)
+                                        log.Printf("Logoff session %d (current: %d, user: %s)", eventSessionID, currentSessionID, currentUsername)
+                                        if eventSessionID == currentSessionID {
+                                                log.Printf("User %s logged off, stopping monitoring", currentUsername)
+                                                stopCurrentMonitoring()
+                                                log.Println("Monitoring stopped, waiting for next user logon")
+                                        }
 
                                 case WTS_SESSION_LOCK:
-                                        log.Printf("Lock session %d", sessionID)
+                                        log.Printf("Lock session %d", eventSessionID)
 
                                 case WTS_SESSION_UNLOCK:
-                                        log.Printf("Unlock session %d", sessionID)
+                                        log.Printf("Unlock session %d", eventSessionID)
+
+                                case WTS_CONSOLE_DISCONNECT, WTS_REMOTE_DISCONNECT:
+                                        log.Printf("Disconnect session %d (current: %d)", eventSessionID, currentSessionID)
+                                        if eventSessionID == currentSessionID {
+                                                log.Printf("User %s disconnected, stopping monitoring", currentUsername)
+                                                stopCurrentMonitoring()
+                                                log.Println("Monitoring stopped, waiting for next user")
+                                        }
 
                                 case WTS_CONSOLE_CONNECT, WTS_REMOTE_CONNECT:
-                                        log.Printf("Connect session %d", sessionID)
-                                        if !monitoringStarted {
-                                                username, _ = monitoring.GetActiveSessionInfo()
-                                                if username != "" && username != "SYSTEM" {
-                                                        log.Printf("User: %s (session %d)", username, sessionID)
-                                                        _, cancel, m = s.startMonitoring(cfg, username, sessionID)
-                                                        monitoringStarted = true
-                                                        log.Println("Monitoring started")
+                                        log.Printf("Connect session %d (current: %d)", eventSessionID, currentSessionID)
+                                        if eventSessionID > 0 {
+                                                if currentSessionID != 0 && eventSessionID != currentSessionID {
+                                                        log.Printf("New session %d connecting, stopping old session %d", eventSessionID, currentSessionID)
+                                                        stopCurrentMonitoring()
+                                                }
+                                                if currentSessionID == 0 {
+                                                        startMonitoringForSession(eventSessionID)
                                                 }
                                         }
                                 }
@@ -156,13 +206,7 @@ loop:
         }
 
         changes <- svc.Status{State: svc.StopPending}
-
-        if monitoringStarted && m != nil {
-                stopMonitors(m)
-                if cancel != nil {
-                        cancel()
-                }
-        }
+        stopCurrentMonitoring()
 
         log.Println("Service stopped")
         return false, 0

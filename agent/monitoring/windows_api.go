@@ -161,3 +161,7 @@ func querySessionUsername(sessionId uint32) string {
 
         return syscall.UTF16ToString((*[256]uint16)(unsafe.Pointer(buffer))[:])
 }
+
+func GetSessionUsername(sessionID uint32) string {
+        return querySessionUsername(sessionID)
+}
