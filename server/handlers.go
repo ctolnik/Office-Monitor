@@ -578,3 +578,16 @@ func getActivitySegmentsHandler(c *gin.Context) {
 
         c.JSON(http.StatusOK, segments)
 }
+
+func getDebugTablesHandler(c *gin.Context) {
+        ctx := c.Request.Context()
+
+        stats, err := db.GetTableStats(ctx)
+        if err != nil {
+                zapctx.Error(ctx, "Failed to get table stats", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+                return
+        }
+
+        c.JSON(http.StatusOK, stats)
+}

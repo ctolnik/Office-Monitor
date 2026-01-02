@@ -466,14 +466,54 @@ func (db *Database) Close() error {
         return db.conn.Close()
 }
 
-// GetUniqueUsernames returns list of unique usernames from activity segments
+type TableStats struct {
+        ActivityEvents   int64    `json:"activity_events"`
+        ActivitySegments int64    `json:"activity_segments"`
+        USBEvents        int64    `json:"usb_events"`
+        FileEvents       int64    `json:"file_events"`
+        Screenshots      int64    `json:"screenshots"`
+        KeyboardEvents   int64    `json:"keyboard_events"`
+        UniqueUsers      []string `json:"unique_users"`
+}
+
+func (db *Database) GetTableStats(ctx context.Context) (*TableStats, error) {
+        stats := &TableStats{}
+
+        tables := []struct {
+                name  string
+                count *int64
+        }{
+                {"activity_events", &stats.ActivityEvents},
+                {"activity_segments", &stats.ActivitySegments},
+                {"usb_events", &stats.USBEvents},
+                {"file_copy_events", &stats.FileEvents},
+                {"screenshot_metadata", &stats.Screenshots},
+                {"keyboard_events", &stats.KeyboardEvents},
+        }
+
+        for _, t := range tables {
+                query := fmt.Sprintf("SELECT count() FROM monitoring.%s", t.name)
+                row := db.conn.QueryRow(ctx, query)
+                if err := row.Scan(t.count); err != nil {
+                        *t.count = -1
+                }
+        }
+
+        users, _ := db.GetUniqueUsernames(ctx)
+        stats.UniqueUsers = users
+
+        return stats, nil
+}
+
+// GetUniqueUsernames returns list of unique usernames from all activity tables
 func (db *Database) GetUniqueUsernames(ctx context.Context) ([]string, error) {
-        // Use activity_segments as primary source (more up-to-date)
-        // Fall back to activity_events if needed
-        query := `SELECT DISTINCT username 
-                  FROM monitoring.activity_segments 
-                  WHERE timestamp_start > now() - INTERVAL 7 DAY
-                  ORDER BY username`
+        query := `SELECT DISTINCT username FROM (
+                SELECT DISTINCT username FROM monitoring.activity_segments 
+                WHERE timestamp_start > now() - INTERVAL 90 DAY AND username != ''
+                UNION ALL
+                SELECT DISTINCT username FROM monitoring.activity_events 
+                WHERE timestamp > now() - INTERVAL 90 DAY AND username != ''
+        ) ORDER BY username`
 
         rows, err := db.conn.Query(ctx, query)
         if err != nil {
@@ -487,27 +527,7 @@ func (db *Database) GetUniqueUsernames(ctx context.Context) ([]string, error) {
                 if err := rows.Scan(&username); err != nil {
                         continue
                 }
-                users = append(users, username)
-        }
-
-        // If no users found in segments, try activity_events as fallback
-        if len(users) == 0 {
-                fallbackQuery := `SELECT DISTINCT username 
-                          FROM monitoring.activity_events 
-                          WHERE timestamp > now() - INTERVAL 7 DAY
-                          ORDER BY username`
-
-                fallbackRows, err := db.conn.Query(ctx, fallbackQuery)
-                if err != nil {
-                        return users, nil // Return empty list, don't fail
-                }
-                defer fallbackRows.Close()
-
-                for fallbackRows.Next() {
-                        var username string
-                        if err := fallbackRows.Scan(&username); err != nil {
-                                continue
-                        }
+                if username != "" {
                         users = append(users, username)
                 }
         }

@@ -185,6 +185,9 @@ func main() {
                 api.POST("/settings/logo", uploadLogoHandler)
 
                 api.GET("/screenshots/file/:id", getScreenshotHandler)
+
+                // Diagnostics
+                api.GET("/debug/tables", getDebugTablesHandler)
         }
 
         addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
