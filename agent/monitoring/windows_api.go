@@ -55,23 +55,29 @@ type WTS_SESSION_INFO struct {
 }
 
 func GetActiveSessionUsername() string {
-        username := os.Getenv("USERNAME")
-        if username != "" && username != "SYSTEM" {
-                return username
-        }
-
-        wtsUsername := getWTSActiveUsername()
-        if wtsUsername != "" {
-                return wtsUsername
-        }
-
-        if username != "" {
-                return username
-        }
-        return "SYSTEM"
+        username, _ := GetActiveSessionInfo()
+        return username
 }
 
-func getWTSActiveUsername() string {
+func GetActiveSessionInfo() (username string, sessionID uint32) {
+        envUsername := os.Getenv("USERNAME")
+        if envUsername != "" && envUsername != "SYSTEM" {
+                sessionID = getActiveSessionID()
+                return envUsername, sessionID
+        }
+
+        username, sessionID = getWTSActiveSessionInfo()
+        if username != "" {
+                return username, sessionID
+        }
+
+        if envUsername != "" {
+                return envUsername, 0
+        }
+        return "SYSTEM", 0
+}
+
+func getActiveSessionID() uint32 {
         var sessionInfoPtr uintptr
         var count uint32
 
@@ -84,7 +90,35 @@ func getWTSActiveUsername() string {
         )
 
         if ret == 0 || sessionInfoPtr == 0 {
-                return ""
+                return 0
+        }
+        defer procWTSFreeMemory.Call(sessionInfoPtr)
+
+        sessionSize := unsafe.Sizeof(WTS_SESSION_INFO{})
+        for i := uint32(0); i < count; i++ {
+                session := (*WTS_SESSION_INFO)(unsafe.Pointer(sessionInfoPtr + uintptr(i)*sessionSize))
+                if session.State == WTSActive && session.SessionId != 0 {
+                        return session.SessionId
+                }
+        }
+
+        return 0
+}
+
+func getWTSActiveSessionInfo() (string, uint32) {
+        var sessionInfoPtr uintptr
+        var count uint32
+
+        ret, _, _ := procWTSEnumerateSessions.Call(
+                WTS_CURRENT_SERVER_HANDLE,
+                0,
+                1,
+                uintptr(unsafe.Pointer(&sessionInfoPtr)),
+                uintptr(unsafe.Pointer(&count)),
+        )
+
+        if ret == 0 || sessionInfoPtr == 0 {
+                return "", 0
         }
         defer procWTSFreeMemory.Call(sessionInfoPtr)
 
@@ -95,12 +129,17 @@ func getWTSActiveUsername() string {
                 if session.State == WTSActive && session.SessionId != 0 {
                         username := querySessionUsername(session.SessionId)
                         if username != "" {
-                                return username
+                                return username, session.SessionId
                         }
                 }
         }
 
-        return ""
+        return "", 0
+}
+
+func getWTSActiveUsername() string {
+        username, _ := getWTSActiveSessionInfo()
+        return username
 }
 
 func querySessionUsername(sessionId uint32) string {

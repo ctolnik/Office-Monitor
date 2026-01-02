@@ -92,10 +92,10 @@ func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, change
         var cancel context.CancelFunc
         monitoringStarted := false
 
-        username := monitoring.GetActiveSessionUsername()
-        if username != "" && username != "SYSTEM" {
-                log.Printf("User: %s", username)
-                _, cancel, m = s.startMonitoring(cfg, username)
+        username, sessionID := monitoring.GetActiveSessionInfo()
+        if username != "" && username != "SYSTEM" && sessionID > 0 {
+                log.Printf("User: %s (session %d)", username, sessionID)
+                _, cancel, m = s.startMonitoring(cfg, username, sessionID)
                 monitoringStarted = true
                 log.Println("Monitoring started")
         } else {
@@ -121,10 +121,10 @@ loop:
                                 case WTS_SESSION_LOGON:
                                         log.Printf("Logon session %d", sessionID)
                                         if !monitoringStarted {
-                                                username = monitoring.GetActiveSessionUsername()
+                                                username, _ = monitoring.GetActiveSessionInfo()
                                                 if username != "" && username != "SYSTEM" {
-                                                        log.Printf("User: %s", username)
-                                                        _, cancel, m = s.startMonitoring(cfg, username)
+                                                        log.Printf("User: %s (session %d)", username, sessionID)
+                                                        _, cancel, m = s.startMonitoring(cfg, username, sessionID)
                                                         monitoringStarted = true
                                                         log.Println("Monitoring started")
                                                 }
@@ -142,10 +142,10 @@ loop:
                                 case WTS_CONSOLE_CONNECT, WTS_REMOTE_CONNECT:
                                         log.Printf("Connect session %d", sessionID)
                                         if !monitoringStarted {
-                                                username = monitoring.GetActiveSessionUsername()
+                                                username, _ = monitoring.GetActiveSessionInfo()
                                                 if username != "" && username != "SYSTEM" {
-                                                        log.Printf("User: %s", username)
-                                                        _, cancel, m = s.startMonitoring(cfg, username)
+                                                        log.Printf("User: %s (session %d)", username, sessionID)
+                                                        _, cancel, m = s.startMonitoring(cfg, username, sessionID)
                                                         monitoringStarted = true
                                                         log.Println("Monitoring started")
                                                 }
@@ -169,15 +169,16 @@ loop:
 }
 
 type monitors struct {
-        activityTracker   *monitoring.ActivityTracker
-        usbMonitor        *monitoring.USBMonitor
-        screenshotMonitor *monitoring.ScreenshotMonitor
-        fileMonitor       *monitoring.FileMonitor
-        keylogger         *monitoring.Keylogger
-        eventBuffer       *buffer.EventBuffer
+        activityTracker    *monitoring.ActivityTracker
+        usbMonitor         *monitoring.USBMonitor
+        screenshotMonitor  *monitoring.ScreenshotMonitor
+        screenshotHelper   *monitoring.HelperProcess
+        fileMonitor        *monitoring.FileMonitor
+        keylogger          *monitoring.Keylogger
+        eventBuffer        *buffer.EventBuffer
 }
 
-func (s *agentService) startMonitoring(cfg *config.Config, username string) (context.Context, context.CancelFunc, *monitors) {
+func (s *agentService) startMonitoring(cfg *config.Config, username string, sessionID uint32) (context.Context, context.CancelFunc, *monitors) {
         m := &monitors{}
 
         httpClient := httpclient.NewClient(httpclient.Config{
@@ -240,21 +241,24 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string) (con
         }
 
         if cfg.Screenshots.Enabled {
-                m.screenshotMonitor = monitoring.NewScreenshotMonitor(
+                helperPath := monitoring.FindHelperExecutable()
+                m.screenshotHelper = monitoring.NewHelperProcess(
+                        helperPath,
                         cfg.Agent.Server.URL,
                         cfg.Agent.ComputerName,
-                        username,
                         cfg.Screenshots.IntervalMinutes,
                         cfg.Screenshots.Quality,
                         cfg.Screenshots.MaxSizeKB,
-                        cfg.Screenshots.CaptureOnlyActive,
-                        cfg.Screenshots.UploadImmediately,
-                        httpClient,
+                        cfg.Logging.File,
                 )
-                if err := m.screenshotMonitor.Start(); err != nil {
-                        log.Printf("ERROR: Screenshots: %v", err)
+                if sessionID > 0 {
+                        if err := m.screenshotHelper.StartInUserSession(sessionID, username); err != nil {
+                                log.Printf("ERROR: Screenshot helper: %v", err)
+                        } else {
+                                log.Println("Screenshot helper: ON (in user session)")
+                        }
                 } else {
-                        log.Println("Screenshots: ON")
+                        log.Println("Screenshot helper: waiting for user session")
                 }
         }
 
@@ -306,8 +310,8 @@ func stopMonitors(m *monitors) {
         if m.fileMonitor != nil {
                 m.fileMonitor.Stop()
         }
-        if m.screenshotMonitor != nil {
-                m.screenshotMonitor.Stop()
+        if m.screenshotHelper != nil {
+                m.screenshotHelper.Stop()
         }
         if m.keylogger != nil {
                 m.keylogger.Stop()
