@@ -71,3 +71,27 @@ Grafana dashboards for advanced analytics (uses external Grafana instance):
   - Table: chronological activity timeline with window titles
   - Time series: hourly activity breakdown
   - Variable `$employee` for employee selection
+
+### Frontend Reports (Updated January 2026)
+
+Enhanced reporting UI with category visualization:
+- **Tabs**: Overview, Activity, Statistics, Daily Report
+- **Categories**: productive (green), unproductive (red), neutral (gray), communication (blue), system (dark-gray), entertainment (orange)
+- **Daily Report** includes:
+  - Day summary (events, screenshots, USB, files)
+  - Chronological timeline with categories
+  - Top applications with usage bars
+  - Screenshots grid with preview
+  - DLP/Security alerts
+- **Statistics** includes:
+  - Category distribution with percentages
+  - Application usage with progress bars
+  - Color-coded category badges
+
+### API Endpoints
+
+Key reporting endpoints:
+- `GET /api/activity/:username` - activity events with categories
+- `GET /api/stats/:username` - application statistics
+- `GET /api/reports/daily/:username` - comprehensive daily report
+- `GET /api/activity/applications/:username` - application usage with categories
