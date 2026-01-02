@@ -162,9 +162,18 @@ func (db *Database) GetKeyboardEvents(ctx context.Context, computerName string, 
 }
 
 func (db *Database) GetActiveEmployees(ctx context.Context) ([]Employee, error) {
-        query := `SELECT computer_name, username, MAX(timestamp) as last_seen
-                FROM monitoring.activity_events
-                WHERE timestamp > now() - INTERVAL 1 HOUR
+        query := `SELECT computer_name, username, MAX(last_seen) as last_seen
+                FROM (
+                        SELECT computer_name, username, MAX(timestamp) as last_seen
+                        FROM monitoring.activity_events
+                        WHERE timestamp > now() - INTERVAL 30 DAY
+                        GROUP BY computer_name, username
+                        UNION ALL
+                        SELECT computer_name, username, MAX(timestamp_start) as last_seen
+                        FROM monitoring.activity_segments
+                        WHERE timestamp_start > now() - INTERVAL 30 DAY
+                        GROUP BY computer_name, username
+                )
                 GROUP BY computer_name, username
                 ORDER BY last_seen DESC`
 
