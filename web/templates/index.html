@@ -36,6 +36,7 @@
                     <button class="tab-btn active" data-tab="overview">Обзор</button>
                     <button class="tab-btn" data-tab="activity">Активность</button>
                     <button class="tab-btn" data-tab="stats">Статистика</button>
+                    <button class="tab-btn" data-tab="report">Дневной отчет</button>
                 </div>
 
                 <div id="overview" class="tab-content active">
@@ -80,6 +81,17 @@
                     <div class="section">
                         <h2>Статистика использования приложений</h2>
                         <div id="app-stats" class="stats-chart"></div>
+                    </div>
+                </div>
+
+                <div id="report" class="tab-content">
+                    <div class="section">
+                        <h2>Дневной отчет по сотруднику</h2>
+                        <div class="date-filter">
+                            <label>Дата: <input type="date" id="report-date"></label>
+                            <button onclick="loadDailyReport()">Загрузить отчет</button>
+                        </div>
+                        <div id="daily-report" class="daily-report"></div>
                     </div>
                 </div>
             </main>
