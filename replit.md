@@ -2,11 +2,19 @@
 
 ## Overview
 
-This project is a comprehensive employee activity monitoring system designed to track and analyze computer usage in an office environment. It comprises a Go-based web server, a Windows desktop agent, and a real-time web interface. The system monitors active windows, application usage, and employee status (active/idle/offline), providing administrators with real-time insights and historical activity reports. The business vision is to enhance productivity and security within internal networks.
+Employee activity monitoring system for 30-person office with Active Directory and Windows 10+. Features activity tracking (active/idle/offline states), periodic screenshots, USB monitoring, mass file copy detection, and optional keyboard logging. Application categorization (productive/unproductive/neutral/communication/entertainment) with friendly names and chronological timeline. Data retained 6 months with employee consent.
+
+## Documentation
+
+- `docs/DEPLOYMENT.md` - Server deployment and migrations
+- `docs/AGENT_SETUP.md` - Windows agent installation
+- `docs/AI_CONTEXT.md` - Context for AI agents
+- `docs/LOGGING.md` - Logging configuration
+- `grafana/README.md` - Grafana dashboard setup
 
 ## User Preferences
 
-Preferred communication style: Simple, everyday language.
+Preferred communication style: Simple, everyday language (Russian).
 
 ## System Architecture
 

@@ -1,44 +1,66 @@
-# Office-Monitor
+# Office Monitor - Система мониторинга активности сотрудников
 
-Comprehensive employee activity monitoring system with DLP capabilities for Windows environments.
+Система мониторинга компьютерной активности для офиса (30 сотрудников).
 
-## Project Structure
+## Возможности
 
-- **server/** - Go REST API server with ClickHouse + MinIO backend
-- **agent/** - Windows monitoring agent (cross-compiled from Linux)
-- **clickhouse/** - Database initialization scripts
-- **docker-compose.yml** - Full stack deployment configuration
+- Отслеживание активных окон и приложений
+- Категоризация приложений (продуктивные/непродуктивные)
+- Периодические скриншоты
+- Мониторинг USB устройств
+- Детектирование массового копирования файлов
+- Хранение данных 6 месяцев
 
-## Quick Build
+## Компоненты
+
+| Компонент | Технология | Описание |
+|-----------|------------|----------|
+| Сервер | Go + Gin | REST API, обработка данных |
+| База данных | ClickHouse | Time-series хранение |
+| Хранилище | MinIO | Скриншоты и файлы |
+| Агент | Go (Windows) | Сбор данных на ПК |
+| Аналитика | Grafana | Дашборды и отчёты |
+
+## Документация
+
+| Документ | Описание |
+|----------|----------|
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Развёртывание и миграции |
+| [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) | Установка агента на Windows |
+| [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md) | Контекст для AI-агентов |
+| [docs/LOGGING.md](docs/LOGGING.md) | Настройка логирования |
+| [grafana/README.md](grafana/README.md) | Настройка Grafana дашбордов |
+
+## Быстрый старт
 
 ```bash
-# Build server
-cd server && go build -o monitoring-server .
+# Клонировать репозиторий
+git clone <repo>
+cd office-monitor
 
-# Build Windows agent (cross-compile)
-cd agent && GOOS=windows GOARCH=amd64 go build -o employee-agent.exe .
-```
+# Настроить переменные окружения
+cp .env.example .env
+# Отредактировать .env
 
-## Docker Deployment
-
-```bash
+# Запустить
 docker-compose up -d
 ```
 
-Server runs on port 5000. See `replit.md` for full architecture documentation.
+Сервер будет доступен на порту 5000.
 
-## Features
+## Структура проекта
 
-- Real-time activity tracking (active/idle/offline states)
-- Screenshot capture with MinIO storage
-- USB device monitoring with shadow copying
-- File copy detection and DLP alerts
-- Keyboard activity logging (optional, compliance required)
-- Process catalog with friendly names
-- Daily productivity reports with scoring
+```
+├── server/           # Go backend
+│   ├── handlers/     # HTTP handlers
+│   └── database/     # ClickHouse queries
+├── agent/            # Windows agent
+│   └── monitoring/   # Monitoring modules
+├── clickhouse/       # SQL migrations
+├── grafana/          # Dashboard JSON
+└── docs/             # Documentation
+```
 
-## Documentation
+## Лицензия
 
-- **replit.md** - Complete system architecture and technical details
-- **agent/README.md** - Agent configuration and deployment guide
-- **FRONTEND_SPECIFICATION.md** - Frontend API specification (for separate React dashboard)
+Внутреннее использование. Требуется согласие сотрудников на мониторинг.
