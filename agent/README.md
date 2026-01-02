@@ -37,28 +37,31 @@ make package
 
 ### Ручная установка:
 
-1. Скопируйте `employee-agent.exe` на целевую машину
+1. Скопируйте `agent-svc.exe` и `agent-sh.exe` на целевую машину
 2. Создайте конфигурационный файл `config.yaml` в той же директории
 3. Запустите агент от имени пользователя
 
 ### Установка как Windows Service:
 
-Для установки агента как службы Windows используйте утилиту `sc`:
+```powershell
+New-Service -Name "OfficeMonitorAgent" `
+  -BinaryPathName '"C:\Program Files\OfficeMonitor\agent-svc.exe" -config "C:\Program Files\OfficeMonitor\config.yaml"' `
+  -DisplayName "Office Monitor Agent" `
+  -StartupType Automatic
 
-```cmd
-sc create "EmployeeMonitorAgent" binPath="C:\Path\To\employee-agent.exe" start=auto
-sc description "EmployeeMonitorAgent" "Employee activity monitoring service"
-sc start "EmployeeMonitorAgent"
+Start-Service OfficeMonitorAgent
 ```
 
-**Важно:** Для работы как служба требуется переделать код с использованием `golang.org/x/sys/windows/svc`.
+**Компоненты:**
+- `agent-svc.exe` - основная служба (работает в Session 0)
+- `agent-sh.exe` - screenshot helper (запускается службой в сессии пользователя)
 
 ### Автозапуск через планировщик задач:
 
 Более простой способ - использовать Task Scheduler:
 
 ```cmd
-schtasks /create /tn "EmployeeMonitor" /tr "C:\Path\To\employee-agent.exe" /sc onlogon /rl highest
+schtasks /create /tn "EmployeeMonitor" /tr "C:\Path\To\agent-svc.exe" /sc onlogon /rl highest
 ```
 
 ## Конфигурация

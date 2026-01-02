@@ -212,15 +212,15 @@ func (h *HelperProcess) IsRunning() bool {
 func FindHelperExecutable() string {
         exePath, err := os.Executable()
         if err != nil {
-                return "screenshot-helper.exe"
+                return "agent-sh.exe"
         }
         
         dir := filepath.Dir(exePath)
-        helperPath := filepath.Join(dir, "screenshot-helper.exe")
+        helperPath := filepath.Join(dir, "agent-sh.exe")
         
         if _, err := os.Stat(helperPath); err == nil {
                 return helperPath
         }
         
-        return "screenshot-helper.exe"
+        return "agent-sh.exe"
 }

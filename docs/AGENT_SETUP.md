@@ -39,12 +39,12 @@
 Создайте папку и скопируйте туда:
 ```
 C:\Program Files\OfficeMonitor\
-├── employee-agent.exe
-├── screenshot-helper.exe   # Для захвата скриншотов
+├── agent-svc.exe    # Основная служба
+├── agent-sh.exe     # Screenshot helper (запускается в сессии пользователя)
 └── config.yaml
 ```
 
-**Примечание:** `screenshot-helper.exe` — отдельный процесс, который запускается службой в сессии пользователя для захвата экрана. Это необходимо, так как Windows Service работает в изолированной Session 0 и не имеет доступа к интерактивному рабочему столу.
+**Примечание:** `agent-sh.exe` — отдельный процесс, который запускается службой в сессии пользователя для захвата экрана. Это необходимо, так как Windows Service работает в изолированной Session 0 и не имеет доступа к интерактивному рабочему столу.
 
 ### 2. Создать config.yaml
 
@@ -101,7 +101,7 @@ New-EventLog -LogName Application -Source "OfficeMonitorAgent"
 ```powershell
 # Создать службу с указанием пути к конфигу
 New-Service -Name "OfficeMonitorAgent" `
-  -BinaryPathName '"C:\Program Files\OfficeMonitor\employee-agent.exe" -config "C:\Program Files\OfficeMonitor\config.yaml"' `
+  -BinaryPathName '"C:\Program Files\OfficeMonitor\agent-svc.exe" -config "C:\Program Files\OfficeMonitor\config.yaml"' `
   -DisplayName "Office Monitor Agent" `
   -StartupType Automatic `
   -Description "Employee activity monitoring service"
@@ -184,7 +184,7 @@ activity_monitoring:
 
 ### Через групповые политики (GPO)
 
-1. Разместите `employee-agent.exe` и `config.yaml` на сетевом ресурсе
+1. Разместите `agent-svc.exe`, `agent-sh.exe` и `config.yaml` на сетевом ресурсе
 2. Создайте GPO со скриптом установки
 3. Привяжите GPO к нужному OU
 
@@ -201,7 +201,7 @@ Copy-Item "$Source\*" $Dest -Force
 
 # Создать службу
 New-Service -Name "OfficeMonitorAgent" `
-  -BinaryPathName "$Dest\employee-agent.exe" `
+  -BinaryPathName "$Dest\agent-svc.exe" `
   -StartupType Automatic
 
 # Запустить
@@ -255,5 +255,5 @@ Remove-Item "C:\ProgramData\OfficeMonitor" -Recurse -Force
 cd agent
 make build-service
 
-# Результат: agent/build/employee-agent.exe
+# Результат: agent-svc.exe, agent-sh.exe
 ```
