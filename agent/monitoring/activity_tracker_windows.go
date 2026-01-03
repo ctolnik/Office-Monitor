@@ -160,6 +160,10 @@ func (at *ActivityTracker) sendCurrentSegmentSnapshot() {
 }
 
 func (at *ActivityTracker) determineState(idleTimeSec int) ActivityState {
+        if idleTimeSec < 0 {
+                return StateActive
+        }
+
         idleThresholdSec := at.idleThresholdMin * 60
         offlineThresholdSec := 30 * 60
 
@@ -312,15 +316,17 @@ func (at *ActivityTracker) getIdleTimeSec() int {
         var lastInputInfo LASTINPUTINFO
         lastInputInfo.CbSize = uint32(unsafe.Sizeof(lastInputInfo))
 
-        ret, _, _ := procGetLastInputInfo.Call(uintptr(unsafe.Pointer(&lastInputInfo)))
+        ret, _, err := procGetLastInputInfo.Call(uintptr(unsafe.Pointer(&lastInputInfo)))
         if ret == 0 {
-                return 0
+                log.Printf("[DEBUG] GetLastInputInfo failed: %v (running in Session 0, cannot detect user input)", err)
+                return -1
         }
 
         tickCount, _, _ := procGetTickCount.Call()
         idleTimeMs := uint32(tickCount) - lastInputInfo.DwTime
+        idleSec := int(idleTimeMs / 1000)
 
-        return int(idleTimeMs / 1000)
+        return idleSec
 }
 
 func (at *ActivityTracker) getForegroundWindow() uintptr {
