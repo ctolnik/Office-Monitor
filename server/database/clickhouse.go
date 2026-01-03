@@ -467,12 +467,12 @@ func (db *Database) Close() error {
 }
 
 type TableStats struct {
-        ActivityEvents   int64             `json:"activity_events"`
-        ActivitySegments int64             `json:"activity_segments"`
-        USBEvents        int64             `json:"usb_events"`
-        FileEvents       int64             `json:"file_events"`
-        Screenshots      int64             `json:"screenshots"`
-        KeyboardEvents   int64             `json:"keyboard_events"`
+        ActivityEvents   uint64            `json:"activity_events"`
+        ActivitySegments uint64            `json:"activity_segments"`
+        USBEvents        uint64            `json:"usb_events"`
+        FileEvents       uint64            `json:"file_events"`
+        Screenshots      uint64            `json:"screenshots"`
+        KeyboardEvents   uint64            `json:"keyboard_events"`
         UniqueUsers      []string          `json:"unique_users"`
         Errors           map[string]string `json:"errors,omitempty"`
         DatabaseExists   bool              `json:"database_exists"`
@@ -495,7 +495,7 @@ func (db *Database) GetTableStats(ctx context.Context) (*TableStats, error) {
 
         tables := []struct {
                 name  string
-                count *int64
+                count *uint64
         }{
                 {"activity_events", &stats.ActivityEvents},
                 {"activity_segments", &stats.ActivitySegments},
@@ -509,7 +509,7 @@ func (db *Database) GetTableStats(ctx context.Context) (*TableStats, error) {
                 query := fmt.Sprintf("SELECT count() FROM monitoring.%s", t.name)
                 row := db.conn.QueryRow(ctx, query)
                 if err := row.Scan(t.count); err != nil {
-                        *t.count = -1
+                        *t.count = 0
                         stats.Errors[t.name] = err.Error()
                 }
         }
