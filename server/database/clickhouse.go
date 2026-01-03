@@ -467,17 +467,31 @@ func (db *Database) Close() error {
 }
 
 type TableStats struct {
-        ActivityEvents   int64    `json:"activity_events"`
-        ActivitySegments int64    `json:"activity_segments"`
-        USBEvents        int64    `json:"usb_events"`
-        FileEvents       int64    `json:"file_events"`
-        Screenshots      int64    `json:"screenshots"`
-        KeyboardEvents   int64    `json:"keyboard_events"`
-        UniqueUsers      []string `json:"unique_users"`
+        ActivityEvents   int64             `json:"activity_events"`
+        ActivitySegments int64             `json:"activity_segments"`
+        USBEvents        int64             `json:"usb_events"`
+        FileEvents       int64             `json:"file_events"`
+        Screenshots      int64             `json:"screenshots"`
+        KeyboardEvents   int64             `json:"keyboard_events"`
+        UniqueUsers      []string          `json:"unique_users"`
+        Errors           map[string]string `json:"errors,omitempty"`
+        DatabaseExists   bool              `json:"database_exists"`
 }
 
 func (db *Database) GetTableStats(ctx context.Context) (*TableStats, error) {
-        stats := &TableStats{}
+        stats := &TableStats{
+                Errors: make(map[string]string),
+        }
+
+        // Check if database exists
+        var dbExists uint8
+        dbCheckRow := db.conn.QueryRow(ctx, "SELECT 1 FROM system.databases WHERE name = 'monitoring'")
+        if err := dbCheckRow.Scan(&dbExists); err != nil {
+                stats.Errors["database"] = fmt.Sprintf("Database 'monitoring' not found: %v", err)
+                stats.DatabaseExists = false
+                return stats, nil
+        }
+        stats.DatabaseExists = true
 
         tables := []struct {
                 name  string
@@ -496,10 +510,14 @@ func (db *Database) GetTableStats(ctx context.Context) (*TableStats, error) {
                 row := db.conn.QueryRow(ctx, query)
                 if err := row.Scan(t.count); err != nil {
                         *t.count = -1
+                        stats.Errors[t.name] = err.Error()
                 }
         }
 
-        users, _ := db.GetUniqueUsernames(ctx)
+        users, err := db.GetUniqueUsernames(ctx)
+        if err != nil {
+                stats.Errors["unique_users"] = err.Error()
+        }
         stats.UniqueUsers = users
 
         return stats, nil
