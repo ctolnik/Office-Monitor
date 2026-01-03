@@ -119,10 +119,16 @@ func (at *ActivityTracker) trackActivity() {
 
 func (at *ActivityTracker) checkAndUpdateState() {
         idleTime := at.getIdleTimeSec()
-        currentState := at.determineState(idleTime)
 
         hwnd := at.getForegroundWindow()
         processName, windowTitle := at.getWindowInfo(hwnd)
+
+        if processName == "unknown" || processName == "" {
+                log.Printf("[DEBUG] Cannot detect foreground window from Session 0 - skipping state check")
+                return
+        }
+
+        currentState := at.determineState(idleTime)
 
         at.mu.Lock()
         defer at.mu.Unlock()
