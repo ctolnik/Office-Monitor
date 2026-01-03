@@ -46,33 +46,39 @@ type ActivitySegment struct {
 }
 
 type ActivityTracker struct {
-        serverURL        string
-        computerName     string
-        username         string
-        enabled          bool
-        idleThresholdMin int
-        pollIntervalSec  int
-        stopChan         chan struct{}
-        wg               sync.WaitGroup
-        mu               sync.RWMutex
-        currentSegment   *ActivitySegment
-        sessionID        string
-        client           *http.Client
+        serverURL         string
+        computerName      string
+        username          string
+        enabled           bool
+        idleThresholdMin  int
+        pollIntervalSec   int
+        sendIntervalSec   int
+        stopChan          chan struct{}
+        wg                sync.WaitGroup
+        mu                sync.RWMutex
+        currentSegment    *ActivitySegment
+        sessionID         string
+        client            *http.Client
+        lastSendTime      time.Time
+        segmentsSent      int
+        segmentsFailed    int
 }
 
 func NewActivityTracker(serverURL, computerName, username string, idleThresholdMin, pollIntervalSec int) *ActivityTracker {
         sessionID := fmt.Sprintf("%s-%d", computerName, time.Now().Unix())
 
         return &ActivityTracker{
-                serverURL:        serverURL,
-                computerName:     computerName,
-                username:         username,
-                enabled:          true,
-                idleThresholdMin: idleThresholdMin,
-                pollIntervalSec:  pollIntervalSec,
-                stopChan:         make(chan struct{}),
-                sessionID:        sessionID,
-                client:           &http.Client{Timeout: 30 * time.Second},
+                serverURL:         serverURL,
+                computerName:      computerName,
+                username:          username,
+                enabled:           true,
+                idleThresholdMin:  idleThresholdMin,
+                pollIntervalSec:   pollIntervalSec,
+                sendIntervalSec:   60,
+                stopChan:          make(chan struct{}),
+                sessionID:         sessionID,
+                client:            &http.Client{Timeout: 30 * time.Second},
+                lastSendTime:      time.Now(),
         }
 }
 
@@ -126,13 +132,31 @@ func (at *ActivityTracker) checkAndUpdateState() {
                 return
         }
 
-        if at.shouldSwitchSegment(currentState, processName, windowTitle) {
+        shouldSwitch := at.shouldSwitchSegment(currentState, processName, windowTitle)
+        timeSinceLastSend := time.Since(at.lastSendTime).Seconds()
+        shouldPeriodicSend := timeSinceLastSend >= float64(at.sendIntervalSec) && at.currentSegment.DurationSec > 0
+
+        if shouldSwitch {
                 at.finalizeCurrentSegment()
                 at.startNewSegment(currentState, processName, windowTitle)
+        } else if shouldPeriodicSend {
+                at.sendCurrentSegmentSnapshot()
         } else {
                 at.currentSegment.TimestampEnd = time.Now()
                 at.currentSegment.DurationSec = uint32(at.currentSegment.TimestampEnd.Sub(at.currentSegment.TimestampStart).Seconds())
         }
+}
+
+func (at *ActivityTracker) sendCurrentSegmentSnapshot() {
+        if at.currentSegment == nil {
+                return
+        }
+
+        at.currentSegment.TimestampEnd = time.Now()
+        at.currentSegment.DurationSec = uint32(at.currentSegment.TimestampEnd.Sub(at.currentSegment.TimestampStart).Seconds())
+
+        snapshot := *at.currentSegment
+        at.sendSegment(&snapshot)
 }
 
 func (at *ActivityTracker) determineState(idleTimeSec int) ActivityState {
@@ -203,21 +227,31 @@ func (at *ActivityTracker) sendSegment(segment *ActivitySegment) {
 
         data, err := json.Marshal(segment)
         if err != nil {
-                log.Printf("Failed to marshal activity segment: %v", err)
+                log.Printf("[ERROR] Failed to marshal activity segment: %v", err)
+                at.segmentsFailed++
                 return
         }
 
         url := fmt.Sprintf("%s/api/activity/segment", at.serverURL)
         resp, err := at.client.Post(url, "application/json", bytes.NewBuffer(data))
         if err != nil {
-                log.Printf("Failed to send activity segment: %v", err)
+                log.Printf("[ERROR] Failed to send activity segment: %v", err)
+                at.segmentsFailed++
                 return
         }
         defer resp.Body.Close()
 
         if resp.StatusCode != http.StatusOK {
-                log.Printf("Server returned non-OK status for activity segment: %d", resp.StatusCode)
+                log.Printf("[ERROR] Server returned status %d for activity segment (user=%s, process=%s, duration=%ds)",
+                        resp.StatusCode, segment.Username, segment.ProcessName, segment.DurationSec)
+                at.segmentsFailed++
+                return
         }
+
+        at.segmentsSent++
+        at.lastSendTime = time.Now()
+        log.Printf("[INFO] Activity segment sent: user=%s, state=%s, process=%s, duration=%ds (total sent: %d, failed: %d)",
+                segment.Username, segment.State, segment.ProcessName, segment.DurationSec, at.segmentsSent, at.segmentsFailed)
 }
 
 func (at *ActivityTracker) parseWindowTitle(processName, windowTitle string) string {
