@@ -8,4 +8,11 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sony/gobreaker v1.0.0
+require (
+	github.com/Microsoft/go-winio v0.6.2
+	github.com/sony/gobreaker v1.0.0
+	go.uber.org/zap v1.27.1
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+)
+
+require go.uber.org/multierr v1.10.0 // indirect

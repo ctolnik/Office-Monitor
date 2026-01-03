@@ -228,10 +228,9 @@ loop:
 }
 
 type monitors struct {
-        activityTracker    *monitoring.ActivityTracker
         usbMonitor         *monitoring.USBMonitor
         screenshotMonitor  *monitoring.ScreenshotMonitor
-        screenshotHelper   *monitoring.HelperProcess
+        sessionHelper      *monitoring.HelperProcess
         fileMonitor        *monitoring.FileMonitor
         keylogger          *monitoring.Keylogger
         eventBuffer        *buffer.EventBuffer
@@ -262,24 +261,6 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
                 go m.eventBuffer.Start(ctx)
         }
 
-        if cfg.ActivityMonitoring.Enabled {
-                idleThresholdMin := cfg.ActivityMonitoring.IdleThresholdSeconds / 60
-                if idleThresholdMin == 0 {
-                        idleThresholdMin = 5
-                }
-                m.activityTracker = monitoring.NewActivityTracker(
-                        cfg.Agent.Server.URL,
-                        cfg.Agent.ComputerName,
-                        username,
-                        idleThresholdMin,
-                        cfg.ActivityMonitoring.IntervalSeconds,
-                )
-                if err := m.activityTracker.Start(); err != nil {
-                        log.Printf("ERROR: Activity: %v", err)
-                } else {
-                        log.Println("Activity tracking: ON")
-                }
-        }
 
         if cfg.USBMonitoring.Enabled {
                 m.usbMonitor = monitoring.NewUSBMonitor(
@@ -301,7 +282,7 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
 
         if cfg.Screenshots.Enabled {
                 helperPath := monitoring.FindHelperExecutable()
-                m.screenshotHelper = monitoring.NewHelperProcess(
+                m.sessionHelper = monitoring.NewHelperProcess(
                         helperPath,
                         cfg.Agent.Server.URL,
                         cfg.Agent.ComputerName,
@@ -311,10 +292,10 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
                         cfg.Logging.File,
                 )
                 if sessionID > 0 {
-                        if err := m.screenshotHelper.StartInUserSession(sessionID, username); err != nil {
-                                log.Printf("ERROR: Screenshot helper: %v", err)
+                        if err := m.sessionHelper.StartInUserSession(sessionID, username); err != nil {
+                                log.Printf("ERROR: Session helper: %v", err)
                         } else {
-                                log.Println("Screenshot helper: ON (in user session)")
+                                log.Println("Session helper: ON (activity tracking + screenshots)")
                         }
                 } else {
                         log.Println("Screenshot helper: waiting for user session")
@@ -360,17 +341,14 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
 }
 
 func stopMonitors(m *monitors) {
-        if m.activityTracker != nil {
-                m.activityTracker.Stop()
-        }
         if m.usbMonitor != nil {
                 m.usbMonitor.Stop()
         }
         if m.fileMonitor != nil {
                 m.fileMonitor.Stop()
         }
-        if m.screenshotHelper != nil {
-                m.screenshotHelper.Stop()
+        if m.sessionHelper != nil {
+                m.sessionHelper.Stop()
         }
         if m.keylogger != nil {
                 m.keylogger.Stop()

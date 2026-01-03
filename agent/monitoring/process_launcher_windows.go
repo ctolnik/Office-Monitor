@@ -108,12 +108,12 @@ func (h *HelperProcess) StartInUserSession(sessionID uint32, username string) er
                 helperPath = filepath.Join(filepath.Dir(exePath), helperPath)
         }
 
-        cmdLine := fmt.Sprintf(`"%s" -server=%s -computer=%s -user=%s -interval=%d -quality=%d -maxsize=%d`,
-                helperPath, h.serverURL, h.computerName, username, h.interval, h.quality, h.maxSizeKB)
+        cmdLine := fmt.Sprintf(`"%s" -server=%s -computer=%s -user=%s -session=%d -screenshot-interval=%d -quality=%d -maxsize=%d`,
+                helperPath, h.serverURL, h.computerName, username, sessionID, h.interval, h.quality, h.maxSizeKB)
         
         if h.logPath != "" {
-                logFile := filepath.Join(filepath.Dir(h.logPath), "screenshot-helper.log")
-                cmdLine += fmt.Sprintf(` -log="%s"`, logFile)
+                logFile := filepath.Join(filepath.Dir(h.logPath), "session-helper.log")
+                cmdLine += fmt.Sprintf(` -log="%s" -log-level=info`, logFile)
         }
 
         cmdLinePtr, _ := syscall.UTF16PtrFromString(cmdLine)
@@ -151,7 +151,7 @@ func (h *HelperProcess) StartInUserSession(sessionID uint32, username string) er
         h.processInfo = &processInfo
         h.running = true
 
-        log.Printf("Screenshot helper started in session %d (PID: %d)", sessionID, processInfo.ProcessId)
+        log.Printf("Session helper started in session %d (PID: %d)", sessionID, processInfo.ProcessId)
 
         return nil
 }
@@ -174,7 +174,7 @@ func (h *HelperProcess) Stop() error {
         h.processInfo = nil
         h.running = false
 
-        log.Println("Screenshot helper stopped")
+        log.Println("Session helper stopped")
         return nil
 }
 
