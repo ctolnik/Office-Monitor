@@ -36,15 +36,27 @@ type ActivitySegment struct {
         Category       string    `json:"category"`
 }
 
+type CategoryType struct {
+        ID        string    `json:"id"`
+        Key       string    `json:"key"`
+        Name      string    `json:"name"`
+        Color     string    `json:"color,omitempty"`
+        SortOrder int32     `json:"sort_order,omitempty"`
+        IsActive  bool      `json:"is_active"`
+        CreatedAt time.Time `json:"created_at"`
+        UpdatedAt time.Time `json:"updated_at"`
+}
+
 type ProcessCatalogEntry struct {
-        ID                  string    `json:"id"`
-        FriendlyName        string    `json:"friendly_name"`
-        ProcessNames        []string  `json:"process_names"`
-        WindowTitlePatterns []string  `json:"window_title_patterns"`
-        Category            string    `json:"category"`
-        IsActive            bool      `json:"is_active"`
-        CreatedAt           time.Time `json:"created_at"`
-        UpdatedAt           time.Time `json:"updated_at"`
+        ID                  string       `json:"id"`
+        FriendlyName        string       `json:"friendly_name"`
+        ProcessNames        []string     `json:"process_names"`
+        WindowTitlePatterns []string     `json:"window_title_patterns"`
+        CategoryID          string       `json:"category_id"`
+        Category            *CategoryType `json:"category,omitempty"`
+        IsActive            bool         `json:"is_active"`
+        CreatedAt           time.Time    `json:"created_at"`
+        UpdatedAt           time.Time    `json:"updated_at"`
 }
 
 type DailyActivitySummary struct {

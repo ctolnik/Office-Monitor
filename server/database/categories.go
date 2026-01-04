@@ -11,6 +11,21 @@ import (
 	"go.uber.org/zap"
 )
 
+func normalizeApplicationCategoryValue(category string) (string, error) {
+	// Keep this in sync with ClickHouse Enum8 in monitoring.application_categories.
+	// Historical UI/clients might send "system" - map it to neutral.
+	if category == "system" {
+		category = "neutral"
+	}
+
+	switch category {
+	case "productive", "unproductive", "neutral", "communication", "entertainment":
+		return category, nil
+	default:
+		return "", fmt.Errorf("invalid category: %s", category)
+	}
+}
+
 func (db *Database) getApplicationCategoryByID(ctx context.Context, id string) (ApplicationCategory, error) {
 	query := `
                 SELECT
@@ -23,9 +38,8 @@ func (db *Database) getApplicationCategoryByID(ctx context.Context, id string) (
                         created_by,
                         updated_by,
                         is_active
-                FROM monitoring.application_categories
+                FROM monitoring.application_categories FINAL
                 WHERE toString(id) = ?
-                ORDER BY updated_at DESC
                 LIMIT 1`
 
 	var cat ApplicationCategory
@@ -50,6 +64,11 @@ func (db *Database) getApplicationCategoryByID(ctx context.Context, id string) (
 
 func (db *Database) insertApplicationCategoryVersion(ctx context.Context, cat ApplicationCategory) error {
 	// We use INSERT to create a new version because application_categories uses ReplacingMergeTree(updated_at).
+	normalizedCategory, err := normalizeApplicationCategoryValue(cat.Category)
+	if err != nil {
+		return err
+	}
+
 	query := `
                 INSERT INTO monitoring.application_categories
                 (id, process_name, process_pattern, category, created_at, updated_at, created_by, updated_by, is_active)
@@ -64,7 +83,7 @@ func (db *Database) insertApplicationCategoryVersion(ctx context.Context, cat Ap
 		cat.ID,
 		cat.ProcessName,
 		cat.ProcessPattern,
-		cat.Category,
+		normalizedCategory,
 		cat.CreatedAt,
 		cat.CreatedBy,
 		cat.UpdatedBy,
@@ -85,7 +104,7 @@ func (db *Database) GetApplicationCategories(ctx context.Context, category, sear
                         created_by,
                         updated_by,
                         is_active
-                FROM monitoring.application_categories
+                FROM monitoring.application_categories FINAL
                 WHERE 1=1`
 
 	args := make([]interface{}, 0)

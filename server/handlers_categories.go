@@ -147,7 +147,7 @@ func bulkUpdateAppCategoriesHandler(c *gin.Context) {
 
 	var req struct {
 		IDs      []string `json:"ids" binding:"required"`
-		Category string   `json:"category" binding:"required,oneof=productive unproductive neutral communication system"`
+		Category string   `json:"category" binding:"required,oneof=productive unproductive neutral communication entertainment"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -320,7 +320,7 @@ func importAppCategoriesHandler(c *gin.Context) {
 			"unproductive":  true,
 			"neutral":       true,
 			"communication": true,
-			"system":        true,
+			"entertainment": true,
 		}
 
 		if !validCategories[cat.Category] {
