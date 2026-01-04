@@ -4,16 +4,18 @@
 package ipc
 
 import (
-        "bufio"
-        "encoding/json"
-        "fmt"
-        "net"
-        "sync"
-        "time"
+	"bufio"
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"sync"
+	"time"
 
-        "github.com/Microsoft/go-winio"
-        "github.com/ctolnik/Office-Monitor/agent/pkg/logger"
-        "go.uber.org/zap"
+	"github.com/Microsoft/go-winio"
+	"github.com/ctolnik/Office-Monitor/agent/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type PipeServer struct {
@@ -88,31 +90,38 @@ func (s *PipeServer) acceptLoop() {
 }
 
 func (s *PipeServer) handleConnection(conn net.Conn) {
-        defer s.wg.Done()
-        defer conn.Close()
+	defer s.wg.Done()
+	defer conn.Close()
 
-        scanner := bufio.NewScanner(conn)
-        scanner.Buffer(make([]byte, 65536), 65536)
+	br := bufio.NewReader(conn)
+	for {
+		payload, err := readFrame(br)
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+			s.log.Error("Failed to read frame", zap.Error(err))
+			return
+		}
 
-        for scanner.Scan() {
-                var event Event
-                if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-                        s.log.Error("Failed to parse event", zap.Error(err))
-                        continue
-                }
+		var event Event
+		if err := json.Unmarshal(payload, &event); err != nil {
+			s.log.Error("Failed to parse event", zap.Error(err))
+			continue
+		}
 
-                s.mu.RLock()
-                handler, ok := s.handlers[event.Type]
-                s.mu.RUnlock()
+		s.mu.RLock()
+		handler, ok := s.handlers[event.Type]
+		s.mu.RUnlock()
 
-                if ok {
-                        if err := handler(event); err != nil {
-                                s.log.Error("Handler failed",
-                                        zap.String("event_type", string(event.Type)),
-                                        zap.Error(err))
-                        }
-                }
-        }
+		if ok {
+			if err := handler(event); err != nil {
+				s.log.Error("Handler failed",
+					zap.String("event_type", string(event.Type)),
+					zap.Error(err))
+			}
+		}
+	}
 }
 
 func (s *PipeServer) Stop() {
@@ -125,12 +134,41 @@ func (s *PipeServer) Stop() {
 }
 
 type PipeClient struct {
-        pipeName     string
-        conn         net.Conn
-        mu           sync.Mutex
-        reconnecting bool
-        stopChan     chan struct{}
-        log          *zap.Logger
+	pipeName     string
+	conn         net.Conn
+	mu           sync.Mutex
+	reconnecting bool
+	stopChan     chan struct{}
+	log          *zap.Logger
+}
+
+func writeFrame(w io.Writer, payload []byte) error {
+	var lenBuf [4]byte
+	binary.LittleEndian.PutUint32(lenBuf[:], uint32(len(payload)))
+	if _, err := w.Write(lenBuf[:]); err != nil {
+		return err
+	}
+	_, err := w.Write(payload)
+	return err
+}
+
+func readFrame(r *bufio.Reader) ([]byte, error) {
+	var lenBuf [4]byte
+	if _, err := io.ReadFull(r, lenBuf[:]); err != nil {
+		return nil, err
+	}
+	n := binary.LittleEndian.Uint32(lenBuf[:])
+	if n == 0 {
+		return nil, fmt.Errorf("empty frame")
+	}
+	if n > 50*1024*1024 {
+		return nil, fmt.Errorf("frame too large: %d", n)
+	}
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return nil, err
+	}
+	return buf, nil
 }
 
 func NewPipeClient(pipeName string) *PipeClient {
@@ -160,28 +198,26 @@ func (c *PipeClient) Connect() error {
 }
 
 func (c *PipeClient) Send(event Event) error {
-        c.mu.Lock()
-        defer c.mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-        if c.conn == nil {
-                return fmt.Errorf("not connected")
-        }
+	if c.conn == nil {
+		return fmt.Errorf("not connected")
+	}
 
-        data, err := json.Marshal(event)
-        if err != nil {
-                return err
-        }
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
 
-        data = append(data, '\n')
-        c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-        _, err = c.conn.Write(data)
-        if err != nil {
-                c.conn.Close()
-                c.conn = nil
-                return err
-        }
+	_ = c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := writeFrame(c.conn, data); err != nil {
+		_ = c.conn.Close()
+		c.conn = nil
+		return err
+	}
 
-        return nil
+	return nil
 }
 
 func (c *PipeClient) Close() {

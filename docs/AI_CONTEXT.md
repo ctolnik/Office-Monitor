@@ -124,9 +124,8 @@ docker exec -i monitoring-clickhouse clickhouse-client --database monitoring \
 
 ## Security Notes
 
-- **No authentication** - API is open, assumes trusted internal network
-- Agents auto-register employees on first connection
-- No API keys required in agent config
+- **API requires authentication**: агент (через сервис) отправляет `X-API-Key`, сервер валидирует ключ
+- Agents may auto-register employees on first connection (but access is still protected by API key)
 
 ## MinIO Storage
 

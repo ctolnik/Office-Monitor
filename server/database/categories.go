@@ -198,14 +198,11 @@ func (db *Database) BulkUpdateCategories(ctx context.Context, ids []string, cate
                 return 0, fmt.Errorf("no IDs provided")
         }
 
-        // Build placeholders for IN clause
-        placeholders := make([]string, len(ids))
-        args := make([]interface{}, 0, len(ids)+2)
-
-        for i := range ids {
-                placeholders[i] = "?"
-                args = append(args, ids[i])
-        }
+	// Build placeholders for IN clause
+	placeholders := make([]string, len(ids))
+	for i := range ids {
+		placeholders[i] = "?"
+	}
 
         query := fmt.Sprintf(`
                 ALTER TABLE monitoring.application_categories

@@ -54,7 +54,7 @@ Start-Service OfficeMonitorAgent
 
 **Компоненты:**
 - `agent-svc.exe` - основная служба (работает в Session 0)
-- `agent-sh.exe` - screenshot helper (запускается службой в сессии пользователя)
+- `agent-sh.exe` - **universal session-helper** (историческое имя "screenSHoot"), запускается службой в сессии пользователя
 
 ### Автозапуск через планировщик задач:
 
@@ -71,7 +71,7 @@ schtasks /create /tn "EmployeeMonitor" /tr "C:\Path\To\agent-svc.exe" /sc onlogo
 ```yaml
 agent:
   computer_name: "${COMPUTERNAME}"
-  api_key: "your-api-key-here"
+  api_key: "your-api-key-here"  # required, sent as X-API-Key
   server:
     url: "http://monitoring-server:5000"
     timeout_seconds: 30
@@ -102,6 +102,8 @@ logging:
 
 Логи пишутся в:
 - `C:\ProgramData\MonitoringAgent\agent.log` (по умолчанию)
+
+Логи должны быть структурированные (JSON). Целевой логгер: `agent/pkg/logger` (zap + lumberjack). Старый `agent/logger` подлежит замене/удалению.
 - Или в путь, указанный в конфигурации
 
 Уровни логирования:
@@ -206,7 +208,9 @@ agent/
 
 ## TODO
 
-- [ ] Реализация Windows Service mode
+- [ ] Полная миграция на универсальный session-helper (agent-sh.exe) для всего UI-зависимого функционала
+- [ ] IPC (Named Pipe): всё (включая скриншоты) через service
+- [ ] Полная миграция логирования на JSON (zap)
 - [ ] Автоматическое обновление агента
 - [ ] Удаленное управление конфигурацией
 - [ ] Метрики производительности агента

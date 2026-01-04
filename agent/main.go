@@ -14,7 +14,7 @@ import (
         "github.com/ctolnik/Office-Monitor/agent/buffer"
         "github.com/ctolnik/Office-Monitor/agent/config"
         "github.com/ctolnik/Office-Monitor/agent/httpclient"
-        "github.com/ctolnik/Office-Monitor/agent/logger"
+	agentlog "github.com/ctolnik/Office-Monitor/agent/pkg/logger"
         "github.com/ctolnik/Office-Monitor/agent/monitoring"
         "golang.org/x/sys/windows/svc"
 )
@@ -50,14 +50,17 @@ func runInteractive(configPath string) {
                 log.Fatalf("Failed to load config: %v", err)
         }
 
-        if cfg.Logging.File != "" {
-                if err := logger.Init(cfg.Logging.File); err != nil {
-                        log.Printf("WARNING: Failed to initialize file logging: %v", err)
-                        log.Println("Continuing with console logging only")
-                } else {
-                        log.Printf("Logging to file: %s", cfg.Logging.File)
-                }
-        }
+		logCfg := agentlog.DefaultConfig()
+		logCfg.Level = cfg.Logging.Level
+		logCfg.FilePath = cfg.Logging.File
+		logCfg.MaxSizeMB = cfg.Logging.MaxSizeMB
+		logCfg.MaxBackups = cfg.Logging.MaxBackups
+		logCfg.Console = cfg.Logging.File == ""
+		if err := agentlog.Init(logCfg); err != nil {
+			log.Printf("WARNING: Failed to initialize zap logger: %v", err)
+		} else {
+			defer func() { _ = agentlog.Sync() }()
+		}
 
         username := monitoring.GetActiveSessionUsername()
         log.Printf("Computer: %s, User: %s", cfg.Agent.ComputerName, username)

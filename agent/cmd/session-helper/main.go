@@ -5,14 +5,13 @@ package main
 
 import (
         "bytes"
-        "context"
-        "encoding/json"
+        "crypto/sha256"
+        "encoding/hex"
         "flag"
         "fmt"
         "image"
         "image/color"
         "image/jpeg"
-        "net/http"
         "os"
         "os/signal"
         "strings"
@@ -21,7 +20,6 @@ import (
         "time"
         "unsafe"
 
-        "github.com/Microsoft/go-winio"
         "github.com/ctolnik/Office-Monitor/agent/pkg/ipc"
         "github.com/ctolnik/Office-Monitor/agent/pkg/logger"
         "go.uber.org/zap"
@@ -97,9 +95,8 @@ type SessionHelper struct {
         screenshotQuality int
         screenshotMaxKB  int
         
-        pipeClient       *pipeClient
-        httpClient       *http.Client
-        log              *zap.Logger
+        pipe            *ipc.PipeClient
+        log             *zap.Logger
         
         currentSegment   *ipc.ActivitySegment
         segmentMu        sync.Mutex
@@ -116,11 +113,6 @@ type SessionHelper struct {
         }
 }
 
-type pipeClient struct {
-        pipeName string
-        conn     interface{}
-        mu       sync.Mutex
-}
 
 func main() {
         serverURL := flag.String("server", "", "Server URL")
@@ -165,7 +157,7 @@ func main() {
                 idleThresholdMin:   *idleMin,
                 screenshotQuality:  *quality,
                 screenshotMaxKB:    *maxSizeKB,
-                httpClient:         &http.Client{Timeout: 60 * time.Second},
+                pipe:               ipc.NewPipeClient(ipc.PipeName),
                 log:                logger.WithComponent("session_helper"),
                 stopChan:           make(chan struct{}),
                 lastSendTime:       time.Now(),
@@ -196,6 +188,11 @@ func main() {
 }
 
 func (h *SessionHelper) Start() {
+        // Best-effort connect; senders will retry
+        if err := h.pipe.Connect(); err != nil {
+                h.log.Warn("Failed to connect to pipe, will retry on send", zap.Error(err))
+        }
+
         h.wg.Add(2)
         go h.activityLoop()
         go h.screenshotLoop()
@@ -320,71 +317,27 @@ func (h *SessionHelper) flushCurrentSegment() {
 func (h *SessionHelper) sendActivitySegment(segment *ipc.ActivitySegment) {
         segment.WindowTitle = h.parseWindowTitle(segment.ProcessName, segment.WindowTitle)
 
-        payload := struct {
-                TimestampStart time.Time `json:"timestamp_start"`
-                TimestampEnd   time.Time `json:"timestamp_end"`
-                DurationSec    uint32    `json:"duration_sec"`
-                State          string    `json:"state"`
-                ComputerName   string    `json:"computer_name"`
-                Username       string    `json:"username"`
-                ProcessName    string    `json:"process_name"`
-                WindowTitle    string    `json:"window_title"`
-                SessionID      string    `json:"session_id"`
-        }{
-                TimestampStart: segment.TimestampStart,
-                TimestampEnd:   segment.TimestampEnd,
-                DurationSec:    segment.DurationSec,
-                State:          segment.State,
-                ComputerName:   h.computerName,
-                Username:       h.username,
-                ProcessName:    segment.ProcessName,
-                WindowTitle:    segment.WindowTitle,
-                SessionID:      fmt.Sprintf("%s-%s", h.computerName, h.sessionID),
+        evt := ipc.Event{
+                Type:      ipc.EventTypeActivity,
+                Timestamp: time.Now(),
+                SessionID: fmt.Sprintf("%s-%s", h.computerName, h.sessionID),
+                Username:  h.username,
+                Data:      *segment,
         }
 
-        data, err := json.Marshal(payload)
-        if err != nil {
-                h.log.Error("Failed to marshal activity segment", zap.Error(err))
-                h.stats.activityFailed++
-                return
-        }
-
-        url := fmt.Sprintf("%s/api/activity/segment", h.serverURL)
-
-        var resp *http.Response
-        var lastErr error
-        for attempt := 1; attempt <= 3; attempt++ {
-                resp, lastErr = h.httpClient.Post(url, "application/json", bytes.NewBuffer(data))
-                if lastErr == nil {
-                        break
+        // best-effort reconnect
+        if err := h.pipe.Send(evt); err != nil {
+                _ = h.pipe.Connect()
+                if err2 := h.pipe.Send(evt); err2 != nil {
+                        h.log.Error("Failed to send activity segment to service", zap.Error(err2))
+                        h.stats.activityFailed++
+                        return
                 }
-                h.log.Warn("Activity segment send failed, retrying",
-                        zap.Int("attempt", attempt),
-                        zap.Error(lastErr),
-                )
-                time.Sleep(time.Duration(attempt) * time.Second)
-        }
-
-        if lastErr != nil {
-                h.log.Error("Failed to send activity segment after retries", zap.Error(lastErr))
-                h.stats.activityFailed++
-                return
-        }
-        defer resp.Body.Close()
-
-        if resp.StatusCode != http.StatusOK {
-                h.log.Error("Server returned non-OK status",
-                        zap.Int("status", resp.StatusCode),
-                        zap.String("process", segment.ProcessName),
-                )
-                h.stats.activityFailed++
-                return
         }
 
         h.stats.activitySent++
         h.lastSendTime = time.Now()
-
-        h.log.Info("Activity segment sent",
+        h.log.Info("Activity segment queued",
                 zap.String("state", segment.State),
                 zap.String("process", segment.ProcessName),
                 zap.Uint32("duration_sec", segment.DurationSec),
@@ -524,7 +477,7 @@ func (h *SessionHelper) extractBrowserInfo(title string) string {
 }
 
 func (h *SessionHelper) captureAndSendScreenshot() {
-        _, windowTitle := h.getForegroundInfo()
+        processName, windowTitle := h.getForegroundInfo()
 
         img, err := h.takeScreenshot()
         if err != nil {
@@ -553,52 +506,53 @@ func (h *SessionHelper) captureAndSendScreenshot() {
         }
 
         screenshotID := fmt.Sprintf("%s_%s_%d", h.computerName, h.username, time.Now().Unix())
+        sum := sha256.Sum256(imageData)
 
-        screenshot := map[string]interface{}{
-                "timestamp":     time.Now(),
-                "computer_name": h.computerName,
-                "username":      h.username,
-                "screenshot_id": screenshotID,
-                "window_title":  windowTitle,
-                "process_name":  "",
-                "file_size":     int64(len(imageData)),
-                "image_data":    imageData,
+        begin := ipc.ScreenshotBegin{
+                ScreenshotID: screenshotID,
+                Timestamp:    time.Now(),
+                ComputerName: h.computerName,
+                Username:     h.username,
+                SessionID:    fmt.Sprintf("%s-%s", h.computerName, h.sessionID),
+                ProcessName:  processName,
+                WindowTitle:  windowTitle,
+                Quality:      h.screenshotQuality,
+                MimeType:     "image/jpeg",
+                TotalSize:    len(imageData),
+                SHA256:       hex.EncodeToString(sum[:]),
         }
 
-        data, err := json.Marshal(screenshot)
-        if err != nil {
-                h.log.Error("Failed to marshal screenshot", zap.Error(err))
-                h.stats.screenshotFailed++
-                return
+        if err := h.pipe.Send(ipc.Event{Type: ipc.EventTypeShotBegin, Timestamp: time.Now(), SessionID: begin.SessionID, Username: h.username, Data: begin}); err != nil {
+                _ = h.pipe.Connect()
+                if err2 := h.pipe.Send(ipc.Event{Type: ipc.EventTypeShotBegin, Timestamp: time.Now(), SessionID: begin.SessionID, Username: h.username, Data: begin}); err2 != nil {
+                        h.log.Error("Failed to send screenshot begin", zap.Error(err2))
+                        h.stats.screenshotFailed++
+                        return
+                }
         }
 
-        ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-        defer cancel()
-
-        req, err := http.NewRequestWithContext(ctx, "POST", h.serverURL+"/api/screenshot", bytes.NewReader(data))
-        if err != nil {
-                h.log.Error("Failed to create request", zap.Error(err))
-                h.stats.screenshotFailed++
-                return
+        const chunkSize = 32 * 1024
+        for off := 0; off < len(imageData); off += chunkSize {
+                end := off + chunkSize
+                if end > len(imageData) {
+                        end = len(imageData)
+                }
+                chunk := ipc.ScreenshotChunk{ScreenshotID: screenshotID, Offset: off, Data: imageData[off:end]}
+                if err := h.pipe.Send(ipc.Event{Type: ipc.EventTypeShotChunk, Timestamp: time.Now(), SessionID: begin.SessionID, Username: h.username, Data: chunk}); err != nil {
+                        h.log.Error("Failed to send screenshot chunk", zap.Error(err), zap.Int("offset", off))
+                        h.stats.screenshotFailed++
+                        return
+                }
         }
-        req.Header.Set("Content-Type", "application/json")
 
-        resp, err := h.httpClient.Do(req)
-        if err != nil {
-                h.log.Error("Failed to send screenshot", zap.Error(err))
-                h.stats.screenshotFailed++
-                return
-        }
-        defer resp.Body.Close()
-
-        if resp.StatusCode >= 400 {
-                h.log.Error("Server returned error for screenshot", zap.Int("status", resp.StatusCode))
+        if err := h.pipe.Send(ipc.Event{Type: ipc.EventTypeShotCommit, Timestamp: time.Now(), SessionID: begin.SessionID, Username: h.username, Data: ipc.ScreenshotCommit{ScreenshotID: screenshotID}}); err != nil {
+                h.log.Error("Failed to send screenshot commit", zap.Error(err))
                 h.stats.screenshotFailed++
                 return
         }
 
         h.stats.screenshotSent++
-        h.log.Info("Screenshot sent",
+        h.log.Info("Screenshot queued",
                 zap.String("id", screenshotID),
                 zap.Int("size_kb", sizeKB),
                 zap.String("window", windowTitle),

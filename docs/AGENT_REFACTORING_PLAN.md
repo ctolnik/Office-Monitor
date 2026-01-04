@@ -9,7 +9,16 @@ Windows сервис работает в Session 0 и не имеет досту
 - `GetLastInputInfo()` возвращает данные Session 0, не пользователя
 - Keylogger hooks не перехватывают ввод из пользовательской сессии
 
-## Решение: Единый Session Helper
+## Решение: Единый Session Helper + единый канал доставки (IPC)
+
+### Термины и совместимость артефактов
+- `agent-svc.exe` — Windows Service (Session 0), оркестратор и единственная точка отправки данных на сервер.
+- `agent-sh.exe` — **историческое имя** бинаря helper ("screenSHoot"), сохраняем для обратной совместимости с инсталляциями/скриптами.
+- `session-helper` — **роль/компонент**: универсальный helper, который запускается в пользовательской сессии и выполняет весь UI-зависимый функционал.
+
+### Ключевой принцип (SRP/DRY)
+- Helper **не делает HTTP-запросов к серверу**.
+- Service отвечает за: буферизацию, ретраи, `X-API-Key`, батч-отправку, единый httpclient.
 
 ### Архитектура
 
@@ -64,42 +73,55 @@ Windows сервис работает в Session 0 и не имеет досту
 
 ## Этапы реализации
 
-### Этап 1: Структурированное логирование (zap)
+### Принятое решение по IPC
+Основной вариант: **Named Pipe + chunked protocol** для скриншотов.
+- Малые события (activity/keyboard/heartbeat) отправляются как JSON события по pipe.
+- Скриншоты отправляются как поток чанков (binary) + отдельные JSON сообщения метаданных/commit.
+
+Причина: не дублировать HTTP-логику в helper и не плодить несколько независимых каналов доставки.
+
+### Этап 1: Структурированное логирование (zap) — довести до конца
 - [x] 1.1 Создать пакет `agent/pkg/logger` с zap конфигурацией
-- [x] 1.2 JSON формат с полями: timestamp, level, component, session_id, message, error
-- [ ] 1.3 Обновить сервис на использование нового логгера (отложено)
-- [x] 1.4 Session helper использует новый логгер
+- [x] 1.2 JSON формат с полями: ts, level, component, session_id, username, msg, error
+- [ ] 1.3 **Перевести service на `agent/pkg/logger`** (сейчас есть старый `agent/logger` → нужно убрать/задепрекейтить)
+- [ ] 1.4 **Единые имена лог-файлов** (service vs helper). Убрать/исправить устаревшие имена вида `session-helper.log`, если бинарь/артефакт называется `agent-sh.exe`.
 - [x] 1.5 Ротация логов (lumberjack)
 
-### Этап 2: IPC через Named Pipes
+### Этап 2: IPC через Named Pipes (целевой путь)
 - [x] 2.1 Создать пакет `agent/pkg/ipc` с протоколом
 - [x] 2.2 Определить JSON схемы событий (activity, keyboard, heartbeat)
-- [ ] 2.3 Pipe server в сервисе для приёма событий от helpers (отложено)
-- [ ] 2.4 Pipe client в helper для отправки событий (отложено)
-- [ ] 2.5 Reconnection logic и health checks (отложено)
+- [ ] 2.3 Pipe server в сервисе для приёма событий от helper
+- [ ] 2.4 Pipe client в helper для отправки событий
+- [ ] 2.5 Reconnection logic + backoff + health/heartbeat
+- [ ] 2.6 **Chunked protocol для скриншотов**:
+  - [ ] JSON meta: `screenshot_begin` (id, ts, size, mime, quality, window/process)
+  - [ ] Binary chunks: `screenshot_chunk` (id, offset, data)
+  - [ ] JSON commit: `screenshot_commit` (id, sha256)
+  - [ ] Ack/err ответы (минимум): `ack`, `error`
 
-Примечание: IPC отложен — session-helper отправляет данные напрямую на сервер.
+Примечание: цель — убрать прямую отправку данных на сервер из helper.
 
-### Этап 3: Унифицированный Session Helper
+### Этап 3: Унифицированный Session Helper (agent-sh.exe как артефакт)
 - [x] 3.1 Создать `agent/cmd/session-helper/main.go`
 - [x] 3.2 Перенести Activity Tracker в helper (GetForegroundWindow, GetLastInputInfo)
-- [ ] 3.3 Перенести Keylogger в helper (отложено на будущее)
+- [ ] 3.3 Перенести Keylogger hooks в helper (в план)
 - [x] 3.4 Интегрировать Screenshot функциональность
-- [x] 3.5 Отправка событий напрямую на сервер через HTTP
+- [ ] 3.5 **Убрать прямой HTTP из helper**: отправка только через PipeClient (включая скриншоты через chunked pipe)
 - [x] 3.6 Graceful shutdown
 
-### Этап 4: Обновление сервиса
+### Этап 4: Обновление сервиса (единственная точка доставки)
 - [x] 4.1 Удалить ActivityTracker из сервиса
 - [x] 4.2 Обновить HelperProcess для запуска session-helper
-- [ ] 4.3 Добавить приём событий через Named Pipe (отложено)
-- [ ] 4.4 Интеграция с существующим Event Buffer (отложено)
-- [ ] 4.5 Мониторинг состояния helpers (частично)
+- [ ] 4.3 PipeServer в сервисе (приём событий)
+- [ ] 4.4 Интеграция PipeServer → EventBuffer → `/api/events/batch`
+- [ ] 4.5 Мониторинг состояния helper (heartbeat + перезапуск при падении)
+- [ ] 4.6 Валидировать `api_key` и обеспечивать его передачу на сервер **только из сервиса**
 
 ### Этап 5: Миграция и тестирование
-- [ ] 5.1 Можно удалить старый screenshot-helper после тестирования
+- [ ] 5.1 После стабилизации удалить/задепрекейтить `cmd/screenshot-helper` (всё в универсальном helper)
 - [x] 5.2 Обновить сборку (Makefile)
-- [ ] 5.3 Тестирование на Windows 10/11
-- [ ] 5.4 Документация (AGENT_SETUP.md)
+- [ ] 5.3 Тестирование на Windows 10/11 (console + service + RDP)
+- [ ] 5.4 Обновить документацию (AGENT_SETUP.md, agent/README.md, WARP.md)
 
 ---
 

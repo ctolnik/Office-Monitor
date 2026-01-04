@@ -112,8 +112,8 @@ func (h *HelperProcess) StartInUserSession(sessionID uint32, username string) er
                 helperPath, h.serverURL, h.computerName, username, sessionID, h.interval, h.quality, h.maxSizeKB)
         
         if h.logPath != "" {
-                logFile := filepath.Join(filepath.Dir(h.logPath), "session-helper.log")
-                cmdLine += fmt.Sprintf(` -log="%s" -log-level=info`, logFile)
+			logFile := filepath.Join(filepath.Dir(h.logPath), "agent-sh.log")
+			cmdLine += fmt.Sprintf(` -log="%s" -log-level=info`, logFile)
         }
 
         cmdLinePtr, _ := syscall.UTF16PtrFromString(cmdLine)

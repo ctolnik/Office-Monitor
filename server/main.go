@@ -286,9 +286,9 @@ func receiveBatchEventsHandler(c *gin.Context) {
         fileCount := 0
         unknownCount := 0
 
-        for _, event := range req.Events {
-                switch event.Type {
-                case "activity":
+		for _, event := range req.Events {
+			switch event.Type {
+			case "activity":
                         var activityData struct {
                                 ComputerName string `json:"computer_name"`
                                 Username     string `json:"username"`
@@ -334,7 +334,42 @@ func receiveBatchEventsHandler(c *gin.Context) {
                         }
                         activityCount++
 
-                case "keyboard":
+			case "activity_segment":
+				var seg database.ActivitySegment
+				if err := json.Unmarshal(event.Data, &seg); err != nil {
+					zapctx.Warn(ctx, "Failed to unmarshal activity_segment event", zap.Error(err))
+					continue
+				}
+
+				if seg.TimestampStart.IsZero() {
+					seg.TimestampStart = event.Timestamp
+				}
+				if seg.TimestampStart.IsZero() {
+					seg.TimestampStart = now
+				}
+				if seg.TimestampEnd.IsZero() {
+					seg.TimestampEnd = seg.TimestampStart
+				}
+
+				// Determine category based on state and process catalog (same logic as receiveActivitySegmentHandler)
+				if seg.State == "idle" || seg.State == "offline" {
+					seg.Category = seg.State
+				} else if seg.Category == "" {
+					category, err := db.MatchProcessToCategory(ctx, seg.ProcessName, seg.WindowTitle)
+					if err != nil {
+						seg.Category = "neutral"
+					} else {
+						seg.Category = category
+					}
+				}
+
+				if err := db.InsertActivitySegment(ctx, seg); err != nil {
+					zapctx.Warn(ctx, "Failed to insert activity segment", zap.Error(err))
+					continue
+				}
+				activityCount++
+
+			case "keyboard":
                         var keyboardData database.KeyboardEvent
                         if err := json.Unmarshal(event.Data, &keyboardData); err != nil {
                                 zapctx.Warn(ctx, "Failed to unmarshal keyboard event", zap.Error(err))

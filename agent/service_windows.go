@@ -4,18 +4,20 @@
 package main
 
 import (
-        "context"
-        "log"
-        "net/http"
-        "time"
-        "unsafe"
+	"context"
+	"encoding/json"
+	"net/http"
+	"time"
+	"unsafe"
 
-        "github.com/ctolnik/Office-Monitor/agent/buffer"
-        "github.com/ctolnik/Office-Monitor/agent/config"
-        "github.com/ctolnik/Office-Monitor/agent/httpclient"
-        "github.com/ctolnik/Office-Monitor/agent/logger"
-        "github.com/ctolnik/Office-Monitor/agent/monitoring"
-        "golang.org/x/sys/windows/svc"
+	"github.com/ctolnik/Office-Monitor/agent/buffer"
+	"github.com/ctolnik/Office-Monitor/agent/config"
+	"github.com/ctolnik/Office-Monitor/agent/httpclient"
+	"github.com/ctolnik/Office-Monitor/agent/monitoring"
+	"github.com/ctolnik/Office-Monitor/agent/pkg/ipc"
+	agentlog "github.com/ctolnik/Office-Monitor/agent/pkg/logger"
+	"go.uber.org/zap"
+	"golang.org/x/sys/windows/svc"
 )
 
 const serviceName = "OfficeMonitorAgent"
@@ -49,41 +51,102 @@ type agentService struct {
 }
 
 func checkServerAvailability(serverURL string) error {
-        client := &http.Client{Timeout: 10 * time.Second}
-        resp, err := client.Get(serverURL + "/api/health")
-        if err != nil {
-                return err
-        }
-        defer resp.Body.Close()
-        return nil
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(serverURL + "/health")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
 }
 
 func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
         changes <- svc.Status{State: svc.StartPending}
 
-        log.Println("Service starting...")
+		cfg, err := config.Load(s.configPath)
+		if err != nil {
+			changes <- svc.Status{State: svc.StopPending}
+			return false, 0
+		}
 
-        cfg, err := config.Load(s.configPath)
-        if err != nil {
-                log.Printf("ERROR: Failed to load config: %v", err)
-                changes <- svc.Status{State: svc.StopPending}
-                return false, 0
-        }
-        log.Printf("Config loaded: %s", cfg.Agent.ComputerName)
+		logCfg := agentlog.DefaultConfig()
+		logCfg.Level = cfg.Logging.Level
+		logCfg.FilePath = cfg.Logging.File
+		logCfg.MaxSizeMB = cfg.Logging.MaxSizeMB
+		logCfg.MaxBackups = cfg.Logging.MaxBackups
+		logCfg.Console = cfg.Logging.File == ""
+		_ = agentlog.Init(logCfg)
+		defer func() { _ = agentlog.Sync() }()
 
-        if cfg.Logging.File != "" {
-                if err := logger.Init(cfg.Logging.File); err != nil {
-                        log.Printf("WARNING: File logging failed: %v", err)
-                } else {
-                        log.Printf("File logging: %s", cfg.Logging.File)
-                }
-        }
+		log := agentlog.WithComponent("service")
+		log.Info("Service starting...", zap.String("computer_name", cfg.Agent.ComputerName))
 
         if err := checkServerAvailability(cfg.Agent.Server.URL); err != nil {
-                log.Printf("WARNING: Server unavailable: %v", err)
+                log.Warn("Server unavailable", zap.Error(err), zap.String("server_url", cfg.Agent.Server.URL))
         } else {
-                log.Println("Server available")
+                log.Info("Server available", zap.String("server_url", cfg.Agent.Server.URL))
         }
+
+        // Single http client + event buffer for whole service lifetime
+        httpClient := httpclient.NewClient(httpclient.Config{
+                ServerURL:      cfg.Agent.Server.URL,
+                APIKey:         cfg.Agent.APIKey,
+                TimeoutSeconds: cfg.Agent.Server.TimeoutSeconds,
+                RetryAttempts:  cfg.Agent.Server.RetryAttempts,
+                RetryDelay:     time.Duration(cfg.Agent.Server.RetryDelay) * time.Second,
+        })
+
+        eventBuffer, err := buffer.NewEventBuffer(buffer.Config{
+                Client:    httpClient,
+                Endpoint:  "/api/events/batch",
+                BufferDir: "buffer",
+        })
+        if err != nil {
+                log.Error("Failed to create event buffer", zap.Error(err))
+        }
+
+        svcCtx, svcCancel := context.WithCancel(context.Background())
+        defer svcCancel()
+        if eventBuffer != nil {
+                go eventBuffer.Start(svcCtx)
+        }
+
+        // IPC server
+        pipeServer := ipc.NewPipeServer(ipc.PipeName)
+        assembler := NewScreenshotAssembler(cfg.Agent.Server.URL, cfg.Agent.APIKey, cfg.Agent.ComputerName, log)
+
+        pipeServer.RegisterHandler(ipc.EventTypeActivity, func(e ipc.Event) error {
+                var seg ipc.ActivitySegment
+                b, _ := json.Marshal(e.Data)
+                _ = json.Unmarshal(b, &seg)
+
+                payload := map[string]interface{}{
+                        "timestamp_start": seg.TimestampStart,
+                        "timestamp_end":   seg.TimestampEnd,
+                        "duration_sec":    seg.DurationSec,
+                        "state":           seg.State,
+                        "computer_name":   cfg.Agent.ComputerName,
+                        "username":        e.Username,
+                        "process_name":    seg.ProcessName,
+                        "window_title":    seg.WindowTitle,
+                        "session_id":      e.SessionID,
+                }
+                if eventBuffer != nil {
+                        return eventBuffer.Add("activity_segment", payload)
+                }
+                return nil
+        })
+
+        pipeServer.RegisterHandler(ipc.EventTypeShotBegin, assembler.HandleBegin)
+        pipeServer.RegisterHandler(ipc.EventTypeShotChunk, assembler.HandleChunk)
+        pipeServer.RegisterHandler(ipc.EventTypeShotCommit, assembler.HandleCommit)
+
+        if err := pipeServer.Start(); err != nil {
+                log.Error("Failed to start pipe server", zap.Error(err))
+        } else {
+                log.Info("Pipe server started", zap.String("pipe", ipc.PipeName))
+        }
+        defer pipeServer.Stop()
 
         const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptSessionChange
         changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
@@ -95,7 +158,7 @@ func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, change
 
         stopCurrentMonitoring := func() {
                 if m != nil {
-                        stopMonitors(m)
+                        stopMonitors(m, log)
                         m = nil
                 }
                 if cancel != nil {
@@ -116,42 +179,46 @@ func (s *agentService) Execute(args []string, r <-chan svc.ChangeRequest, change
                         if username != "" && username != "SYSTEM" {
                                 break
                         }
-                        log.Printf("Session %d: waiting for username (attempt %d/5)", sessionID, attempt+1)
+                        log.Debug("Waiting for username",
+                                zap.Uint32("session_id", sessionID),
+                                zap.Int("attempt", attempt+1),
+                        )
                         time.Sleep(500 * time.Millisecond)
                 }
                 if username == "" || username == "SYSTEM" {
-                        log.Printf("Session %d: no valid user after retries", sessionID)
+                        log.Warn("No valid user after retries", zap.Uint32("session_id", sessionID))
                         return false
                 }
-                log.Printf("Starting monitoring for user: %s (session %d)", username, sessionID)
-                _, cancel, m = s.startMonitoring(cfg, username, sessionID)
+                log.Info("Starting monitoring for session",
+                        zap.String("username", username),
+                        zap.Uint32("session_id", sessionID),
+                )
+                _, cancel, m = s.startMonitoring(cfg, username, sessionID, eventBuffer, log)
                 currentSessionID = sessionID
                 currentUsername = username
-                log.Println("Monitoring started")
+                log.Info("Monitoring started")
                 return true
         }
 
         allSessions := monitoring.EnumerateAllUserSessions()
-        log.Printf("Found %d user sessions at startup", len(allSessions))
+        log.Info("Found user sessions at startup", zap.Int("count", len(allSessions)))
         for _, sess := range allSessions {
-                stateStr := "Unknown"
-                switch sess.State {
-                case 0:
-                        stateStr = "Active"
-                case 1:
-                        stateStr = "Connected"
-                case 4:
-                        stateStr = "Disconnected"
-                }
-                log.Printf("  Session %d: user=%s, state=%s(%d)", sess.SessionID, sess.Username, stateStr, sess.State)
+                log.Info("Session",
+                        zap.Uint32("session_id", sess.SessionID),
+                        zap.String("username", sess.Username),
+                        zap.Int("state", int(sess.State)),
+                )
         }
 
         username, sessionID := monitoring.GetActiveSessionInfo()
         if username != "" && username != "SYSTEM" && sessionID > 0 {
-                log.Printf("Selected session for monitoring: user=%s, session=%d", username, sessionID)
+                log.Info("Selected session for monitoring",
+                        zap.String("username", username),
+                        zap.Uint32("session_id", sessionID),
+                )
                 startMonitoringForSession(sessionID)
         } else {
-                log.Println("No active user session found, waiting for user logon...")
+                log.Info("No active user session found, waiting for user logon...")
         }
 
 loop:
@@ -163,7 +230,7 @@ loop:
                                 changes <- c.CurrentStatus
 
                         case svc.Stop, svc.Shutdown:
-                                log.Println("Shutdown requested")
+                                log.Info("Shutdown requested")
                                 break loop
 
                         case svc.SessionChange:
@@ -171,10 +238,15 @@ loop:
 
                                 switch c.EventType {
                                 case WTS_SESSION_LOGON:
-                                        log.Printf("Logon session %d (current: %d)", eventSessionID, currentSessionID)
+								log.Info("Logon session",
+									zap.Uint32("session_id", eventSessionID),
+									zap.Uint32("current_session_id", currentSessionID),
+								)
                                         if eventSessionID > 0 {
                                                 if currentSessionID != 0 && eventSessionID != currentSessionID {
-                                                        log.Printf("New user logging in, stopping monitoring for session %d", currentSessionID)
+												log.Info("New user logon, stopping previous monitoring",
+													zap.Uint32("previous_session_id", currentSessionID),
+												)
                                                         stopCurrentMonitoring()
                                                 }
                                                 if currentSessionID == 0 {
@@ -183,32 +255,45 @@ loop:
                                         }
 
                                 case WTS_SESSION_LOGOFF:
-                                        log.Printf("Logoff session %d (current: %d, user: %s)", eventSessionID, currentSessionID, currentUsername)
+								log.Info("Logoff session",
+									zap.Uint32("session_id", eventSessionID),
+									zap.Uint32("current_session_id", currentSessionID),
+									zap.String("current_username", currentUsername),
+								)
                                         if eventSessionID == currentSessionID {
-                                                log.Printf("User %s logged off, stopping monitoring", currentUsername)
+												log.Info("User logged off, stopping monitoring", zap.String("username", currentUsername))
                                                 stopCurrentMonitoring()
-                                                log.Println("Monitoring stopped, waiting for next user logon")
+												log.Info("Monitoring stopped, waiting for next user logon")
                                         }
 
                                 case WTS_SESSION_LOCK:
-                                        log.Printf("Lock session %d", eventSessionID)
+								log.Info("Lock session", zap.Uint32("session_id", eventSessionID))
 
                                 case WTS_SESSION_UNLOCK:
-                                        log.Printf("Unlock session %d", eventSessionID)
+								log.Info("Unlock session", zap.Uint32("session_id", eventSessionID))
 
                                 case WTS_CONSOLE_DISCONNECT, WTS_REMOTE_DISCONNECT:
-                                        log.Printf("Disconnect session %d (current: %d)", eventSessionID, currentSessionID)
+								log.Info("Disconnect session",
+									zap.Uint32("session_id", eventSessionID),
+									zap.Uint32("current_session_id", currentSessionID),
+								)
                                         if eventSessionID == currentSessionID {
-                                                log.Printf("User %s disconnected, stopping monitoring", currentUsername)
+												log.Info("User disconnected, stopping monitoring", zap.String("username", currentUsername))
                                                 stopCurrentMonitoring()
-                                                log.Println("Monitoring stopped, waiting for next user")
+												log.Info("Monitoring stopped, waiting for next user")
                                         }
 
                                 case WTS_CONSOLE_CONNECT, WTS_REMOTE_CONNECT:
-                                        log.Printf("Connect session %d (current: %d)", eventSessionID, currentSessionID)
+								log.Info("Connect session",
+									zap.Uint32("session_id", eventSessionID),
+									zap.Uint32("current_session_id", currentSessionID),
+								)
                                         if eventSessionID > 0 {
                                                 if currentSessionID != 0 && eventSessionID != currentSessionID {
-                                                        log.Printf("New session %d connecting, stopping old session %d", eventSessionID, currentSessionID)
+												log.Info("New session connected, stopping old monitoring",
+													zap.Uint32("new_session_id", eventSessionID),
+													zap.Uint32("previous_session_id", currentSessionID),
+												)
                                                         stopCurrentMonitoring()
                                                 }
                                                 if currentSessionID == 0 {
@@ -223,44 +308,21 @@ loop:
         changes <- svc.Status{State: svc.StopPending}
         stopCurrentMonitoring()
 
-        log.Println("Service stopped")
+        log.Info("Service stopped")
         return false, 0
 }
 
 type monitors struct {
-        usbMonitor         *monitoring.USBMonitor
-        screenshotMonitor  *monitoring.ScreenshotMonitor
-        sessionHelper      *monitoring.HelperProcess
-        fileMonitor        *monitoring.FileMonitor
-        keylogger          *monitoring.Keylogger
-        eventBuffer        *buffer.EventBuffer
+        usbMonitor        *monitoring.USBMonitor
+        sessionHelper     *monitoring.HelperProcess
+        fileMonitor       *monitoring.FileMonitor
+        keylogger         *monitoring.Keylogger
 }
 
-func (s *agentService) startMonitoring(cfg *config.Config, username string, sessionID uint32) (context.Context, context.CancelFunc, *monitors) {
+func (s *agentService) startMonitoring(cfg *config.Config, username string, sessionID uint32, eventBuffer *buffer.EventBuffer, log *zap.Logger) (context.Context, context.CancelFunc, *monitors) {
         m := &monitors{}
 
-        httpClient := httpclient.NewClient(httpclient.Config{
-                ServerURL:      cfg.Agent.Server.URL,
-                APIKey:         cfg.Agent.APIKey,
-                TimeoutSeconds: 30,
-                RetryAttempts:  3,
-        })
-
-        var err error
-        m.eventBuffer, err = buffer.NewEventBuffer(buffer.Config{
-                Client:    httpClient,
-                Endpoint:  "/api/events/batch",
-                BufferDir: "buffer",
-        })
-        if err != nil {
-                log.Printf("ERROR: Buffer: %v", err)
-        }
-
         ctx, cancel := context.WithCancel(context.Background())
-        if m.eventBuffer != nil {
-                go m.eventBuffer.Start(ctx)
-        }
-
 
         if cfg.USBMonitoring.Enabled {
                 m.usbMonitor = monitoring.NewUSBMonitor(
@@ -271,12 +333,12 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
                         cfg.USBMonitoring.ShadowCopyDest,
                         cfg.USBMonitoring.CopyFileExtensions,
                         cfg.USBMonitoring.ExcludePatterns,
-                        m.eventBuffer,
+                        eventBuffer,
                 )
                 if err := m.usbMonitor.Start(); err != nil {
-                        log.Printf("ERROR: USB: %v", err)
+                        log.Error("USB monitoring start failed", zap.Error(err))
                 } else {
-                        log.Println("USB monitoring: ON")
+                        log.Info("USB monitoring: ON")
                 }
         }
 
@@ -293,12 +355,12 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
                 )
                 if sessionID > 0 {
                         if err := m.sessionHelper.StartInUserSession(sessionID, username); err != nil {
-                                log.Printf("ERROR: Session helper: %v", err)
+                                log.Error("Session helper start failed", zap.Error(err))
                         } else {
-                                log.Println("Session helper: ON (activity tracking + screenshots)")
+                                log.Info("Session helper: ON")
                         }
                 } else {
-                        log.Println("Screenshot helper: waiting for user session")
+                        log.Info("Session helper: waiting for user session")
                 }
         }
 
@@ -311,12 +373,12 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
                         cfg.FileMonitoring.LargeCopyThresholdMB,
                         cfg.FileMonitoring.LargeCopyFileCount,
                         cfg.FileMonitoring.DetectExternalCopy,
-                        m.eventBuffer,
+                        eventBuffer,
                 )
                 if err := m.fileMonitor.Start(); err != nil {
-                        log.Printf("ERROR: Files: %v", err)
+                        log.Error("File monitoring start failed", zap.Error(err))
                 } else {
-                        log.Println("File monitoring: ON")
+                        log.Info("File monitoring: ON")
                 }
         }
 
@@ -328,19 +390,19 @@ func (s *agentService) startMonitoring(cfg *config.Config, username string, sess
                         cfg.Keylogger.MonitoredProcesses,
                         cfg.Keylogger.BufferSizeChars,
                         cfg.Keylogger.SendIntervalMin,
-                        m.eventBuffer,
+                        eventBuffer,
                 )
                 if err := m.keylogger.Start(); err != nil {
-                        log.Printf("ERROR: Keylogger: %v", err)
+                        log.Error("Keylogger start failed", zap.Error(err))
                 } else {
-                        log.Println("Keylogger: ON")
+                        log.Info("Keylogger: ON")
                 }
         }
 
         return ctx, cancel, m
 }
 
-func stopMonitors(m *monitors) {
+func stopMonitors(m *monitors, log *zap.Logger) {
         if m.usbMonitor != nil {
                 m.usbMonitor.Stop()
         }
@@ -348,15 +410,12 @@ func stopMonitors(m *monitors) {
                 m.fileMonitor.Stop()
         }
         if m.sessionHelper != nil {
-                m.sessionHelper.Stop()
+                _ = m.sessionHelper.Stop()
         }
         if m.keylogger != nil {
                 m.keylogger.Stop()
         }
-        if m.eventBuffer != nil {
-                m.eventBuffer.Stop()
-        }
-        log.Println("All monitors stopped")
+        log.Info("All monitors stopped")
 }
 
 func getSessionUsername() string {
