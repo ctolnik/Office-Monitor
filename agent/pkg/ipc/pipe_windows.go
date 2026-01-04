@@ -44,12 +44,20 @@ func (s *PipeServer) RegisterHandler(eventType EventType, handler func(Event) er
 }
 
 func (s *PipeServer) Start() error {
-        listener, err := winio.ListenPipe(s.pipeName, &winio.PipeConfig{
-                SecurityDescriptor: "",
-                MessageMode:        false,
-                InputBufferSize:    65536,
-                OutputBufferSize:   65536,
-        })
+		// Allow connecting from the interactive user session.
+		// SDDL:
+		// - SY: LocalSystem
+		// - BA: Built-in Administrators
+		// - AU: Authenticated Users
+		// Grant GA (Generic All) to enable read/write and simplify IPC.
+		sddl := "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;AU)"
+
+		listener, err := winio.ListenPipe(s.pipeName, &winio.PipeConfig{
+			SecurityDescriptor: sddl,
+			MessageMode:        false,
+			InputBufferSize:    65536,
+			OutputBufferSize:   65536,
+		})
         if err != nil {
                 return fmt.Errorf("failed to create pipe: %w", err)
         }
