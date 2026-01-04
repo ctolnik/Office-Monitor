@@ -223,21 +223,25 @@ func (h *SessionHelper) activityLoop() {
 }
 
 func (h *SessionHelper) screenshotLoop() {
-	defer h.wg.Done()
+        defer h.wg.Done()
 
-	ticker := time.NewTicker(h.screenshotInterval)
-	defer ticker.Stop()
+        // Give the user desktop a bit of time to become available after logon/RDP connect.
+        time.Sleep(5 * time.Second)
 
-	h.captureAndSendScreenshot()
+        ticker := time.NewTicker(h.screenshotInterval)
+        defer ticker.Stop()
 
-	for {
-		select {
-		case <-h.stopChan:
-			return
-		case <-ticker.C:
-			h.captureAndSendScreenshot()
-		}
-	}
+        // First capture after initial delay.
+        h.captureAndSendScreenshot()
+
+        for {
+                select {
+                case <-h.stopChan:
+                        return
+                case <-ticker.C:
+                        h.captureAndSendScreenshot()
+                }
+        }
 }
 
 func (h *SessionHelper) checkAndUpdateActivity() {
@@ -568,34 +572,34 @@ func (h *SessionHelper) takeScreenshot() (image.Image, error) {
 		return nil, fmt.Errorf("no display available")
 	}
 
-	hDC, _, _ := procGetDC.Call(0)
-	if hDC == 0 {
-		return nil, fmt.Errorf("GetDC failed")
-	}
+        hDC, _, callErr := procGetDC.Call(0)
+        if hDC == 0 {
+                return nil, fmt.Errorf("GetDC failed: %v", callErr)
+        }
 	defer procReleaseDC.Call(0, hDC)
 
-	hMemDC, _, _ := procCreateCompatibleDC.Call(hDC)
-	if hMemDC == 0 {
-		return nil, fmt.Errorf("CreateCompatibleDC failed")
-	}
+        hMemDC, _, callErr := procCreateCompatibleDC.Call(hDC)
+        if hMemDC == 0 {
+                return nil, fmt.Errorf("CreateCompatibleDC failed: %v", callErr)
+        }
 	defer procDeleteDC.Call(hMemDC)
 
-	hBitmap, _, _ := procCreateCompatibleBitmap.Call(hDC, width, height)
-	if hBitmap == 0 {
-		return nil, fmt.Errorf("CreateCompatibleBitmap failed")
-	}
+        hBitmap, _, callErr := procCreateCompatibleBitmap.Call(hDC, width, height)
+        if hBitmap == 0 {
+                return nil, fmt.Errorf("CreateCompatibleBitmap failed: %v", callErr)
+        }
 	defer procDeleteObject.Call(hBitmap)
 
-	hOld, _, _ := procSelectObject.Call(hMemDC, hBitmap)
-	if hOld == 0 {
-		return nil, fmt.Errorf("SelectObject failed")
-	}
+        hOld, _, callErr := procSelectObject.Call(hMemDC, hBitmap)
+        if hOld == 0 {
+                return nil, fmt.Errorf("SelectObject failed: %v", callErr)
+        }
 	defer procSelectObject.Call(hMemDC, hOld)
 
-	ret, _, _ := procBitBlt.Call(hMemDC, 0, 0, width, height, hDC, 0, 0, SRCCOPY)
-	if ret == 0 {
-		return nil, fmt.Errorf("BitBlt failed")
-	}
+        ret, _, callErr := procBitBlt.Call(hMemDC, 0, 0, width, height, hDC, 0, 0, SRCCOPY)
+        if ret == 0 {
+                return nil, fmt.Errorf("BitBlt failed: %v", callErr)
+        }
 
 	var bi BITMAPINFO
 	bi.BmiHeader.BiSize = uint32(unsafe.Sizeof(bi.BmiHeader))
