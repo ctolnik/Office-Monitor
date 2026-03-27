@@ -1,0 +1,4 @@
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:ctolnik/office-visor-ru.git
+	branch = main

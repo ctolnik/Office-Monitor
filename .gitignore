@@ -33,8 +33,6 @@ go.work.sum
 server/main
 server/config.yaml
 .DS_Store
-WARP.md
-frontend
 server/monitoring-server
 server/server
 server/monitoring.db

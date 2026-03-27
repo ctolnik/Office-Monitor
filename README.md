@@ -1,73 +1,27 @@
-# Office Monitor - Система мониторинга активности сотрудников
-
-Система мониторинга компьютерной активности для офиса (30 сотрудников).
-
-## Требования
-
-- Docker и Docker Compose
-- Windows 10+ на клиентских машинах
-- Сетевой доступ между агентами и сервером
-
-## Возможности
-
-- Отслеживание активных окон и приложений
-- Категоризация приложений (продуктивные/непродуктивные)
-- Периодические скриншоты
-- Мониторинг USB устройств
-- Детектирование массового копирования файлов
-- Хранение данных 6 месяцев
-
-## Компоненты
-
-| Компонент | Технология | Описание |
-|-----------|------------|----------|
-| Сервер | Go + Gin | REST API, обработка данных |
-| База данных | ClickHouse | Time-series хранение |
-| Хранилище | MinIO | Скриншоты и файлы |
-| Агент | Go (Windows) | Сбор данных на ПК |
-| Аналитика | Grafana | Дашборды и отчёты |
-
-## Документация
-
-| Документ | Описание |
-|----------|----------|
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Развёртывание и миграции |
-| [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) | Установка агента на Windows |
-| [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md) | Контекст для AI-агентов |
-| [docs/LOGGING.md](docs/LOGGING.md) | Настройка логирования |
-| [grafana/README.md](grafana/README.md) | Настройка Grafana дашбордов |
-| [replit.md](replit.md) | Полная архитектура (для разработчиков) |
-
-## Быстрый старт
-
+# Office Monitor
+Система мониторинга активности сотрудников: Go backend, Windows agent, ClickHouse, MinIO и frontend на React.
+## Что в этом репозитории
+- `server/` — backend API и бизнес-логика.
+- `agent/` — Windows агент (service + session-helper).
+- `clickhouse/` — SQL схема/сиды/views.
+- `frontend/` — отдельный репозиторий `office-visor-ru`, подключённый как **git submodule**.
+- `docs/` — каноничная документация проекта.
+## Быстрый старт (локально)
 ```bash
-# Клонировать репозиторий
-git clone <repo>
-cd office-monitor
-
-# Настроить переменные окружения
-cp .env.example .env
-# Отредактировать .env
-
-# Запустить
+git clone git@github.com:ctolnik/Office-Monitor.git
+cd Office-Monitor
+git submodule update --init --recursive
 docker-compose up -d
 ```
-
-Сервер будет доступен на порту 5000.
-
-## Структура проекта
-
-```
-├── server/           # Go backend
-│   ├── handlers/     # HTTP handlers
-│   └── database/     # ClickHouse queries
-├── agent/            # Windows agent
-│   └── monitoring/   # Monitoring modules
-├── clickhouse/       # SQL migrations
-├── grafana/          # Dashboard JSON
-└── docs/             # Documentation
-```
-
+После запуска:
+- UI через nginx: `http://localhost`
+- Backend API: `http://localhost:8081`
+- MinIO console: `http://localhost:9101`
+## Документация
+Вся актуальная документация собрана в `docs/`.
+Точка входа: `docs/README.md`.
+## Важно про frontend
+`frontend/` — это submodule. Для корректной сборки на сервере и локально нужно выполнять обновление submodule после `git pull`.
+Полный рабочий flow (push/pull, docker-01): `docs/REPOSITORY_FLOW.md`.
 ## Лицензия
-
-Внутреннее использование. Требуется согласие сотрудников на мониторинг.
+Внутреннее использование. Необходимо соблюдать локальные требования по уведомлению сотрудников о мониторинге.
