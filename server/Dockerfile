@@ -20,7 +20,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /build/monitoring
 # Final stage
 FROM alpine:3.22.2
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata curl
 
 WORKDIR /app
 

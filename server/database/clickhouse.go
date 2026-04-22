@@ -576,6 +576,16 @@ func (db *Database) Close() error {
 	return db.conn.Close()
 }
 
+// Ping verifies that the ClickHouse connection is still alive. It is used by
+// the backend /health handler to surface database degradation to upstream
+// probes. Returns an error if the underlying connection is not initialized.
+func (db *Database) Ping(ctx context.Context) error {
+	if db == nil || db.conn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return db.conn.Ping(ctx)
+}
+
 type TableStats struct {
 	ActivityEvents   uint64            `json:"activity_events"`
 	ActivitySegments uint64            `json:"activity_segments"`

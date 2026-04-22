@@ -16,10 +16,11 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host   string `yaml:"host"`
-	Port   int    `yaml:"port"`
-	Mode   string `yaml:"mode"`
-	APIKey string `yaml:"api_key"`
+	Host          string `yaml:"host"`
+	Port          int    `yaml:"port"`
+	Mode          string `yaml:"mode"`
+	APIKey        string `yaml:"api_key"`
+	RequireAPIKey bool   `yaml:"require_api_key"`
 }
 
 type DatabaseConfig struct {

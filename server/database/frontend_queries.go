@@ -141,6 +141,56 @@ func (db *Database) DeleteAgent(ctx context.Context, computerName string) error 
 	return db.conn.Exec(ctx, query, computerName)
 }
 
+// UpdateAgentHeartbeat upserts the agent heartbeat timestamp for the given
+// computer while preserving any previously configured feature flags. The
+// underlying table is ReplacingMergeTree(updated_at) so the most recent
+// insert wins after merge. Defaults are applied only when the row does not
+// yet exist, keeping explicit operator configuration intact.
+func (db *Database) UpdateAgentHeartbeat(ctx context.Context, computerName string) error {
+	if computerName == "" {
+		return nil
+	}
+
+	var (
+		apiKey                    string
+		screenshotEnabled         uint8
+		screenshotIntervalMinutes uint32
+		keyloggerEnabled          uint8
+		usbMonitoringEnabled      uint8 = 1
+		fileCopyMonitoringEnabled uint8 = 1
+		largeCopyThresholdMB      uint32 = 100
+		agentVersion              string
+	)
+
+	rowErr := db.conn.QueryRow(ctx, `
+                SELECT api_key, screenshot_enabled, screenshot_interval_minutes,
+                       keylogger_enabled, usb_monitoring_enabled, file_copy_monitoring_enabled,
+                       large_copy_threshold_mb, agent_version
+                FROM monitoring.agent_configs FINAL
+                WHERE computer_name = ?
+                LIMIT 1`, computerName).Scan(
+		&apiKey, &screenshotEnabled, &screenshotIntervalMinutes,
+		&keyloggerEnabled, &usbMonitoringEnabled, &fileCopyMonitoringEnabled,
+		&largeCopyThresholdMB, &agentVersion,
+	)
+	if rowErr != nil {
+		// No existing config: apply sensible defaults aligned with the
+		// table schema in clickhouse/01-schema.sql.
+		screenshotIntervalMinutes = 15
+	}
+
+	now := time.Now()
+	return db.conn.Exec(ctx, `
+                INSERT INTO monitoring.agent_configs
+                        (computer_name, api_key, screenshot_enabled, screenshot_interval_minutes,
+                         keylogger_enabled, usb_monitoring_enabled, file_copy_monitoring_enabled,
+                         large_copy_threshold_mb, last_seen, agent_version, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		computerName, apiKey, screenshotEnabled, screenshotIntervalMinutes,
+		keyloggerEnabled, usbMonitoringEnabled, fileCopyMonitoringEnabled,
+		largeCopyThresholdMB, now, agentVersion, now)
+}
+
 // GetAllUsers returns all unique users from activity_events
 func (db *Database) GetAllUsers(ctx context.Context) ([]string, error) {
 	query := `

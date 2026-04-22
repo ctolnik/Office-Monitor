@@ -26,17 +26,22 @@ var (
 	appLocation   *time.Location
 	dashCache     *DashboardCache
 	logger        *zap.Logger
+	startTime     time.Time
 )
 
 func main() {
 	var err error
 
+	startTime = time.Now()
+
 	cfg, err = config.Load("config.yaml")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	// Initialize logger
-	logger, err := initLogger(cfg.Logging)
+	// Initialize logger. Assign to the package-level variable (not :=) so that
+	// helpers like withLogger() and handlers running outside of a request
+	// context still have access to the global logger.
+	logger, err = initLogger(cfg.Logging)
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
@@ -100,15 +105,32 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// Start the background heartbeat flusher so agent_configs.last_seen
+	// reflects the in-memory ingest activity even without direct agent
+	// heartbeats. The flusher exits when the process terminates.
+	go heartbeatFlusher(zapctx.WithLogger(context.Background(), logger))
+
 	router := gin.Default()
 
 	// Add logger middleware to all routes
 	router.Use(loggerMiddleware(logger))
 
+	// API key middleware. Applied globally but short-circuits for empty key.
+	// `require_api_key=false` keeps it in observe mode: warnings are logged
+	// but requests are not rejected, enabling staged rollout.
+	if cfg.Server.APIKey == "" {
+		logger.Warn("Server API key is not configured; authentication middleware is disabled")
+	}
+	router.Use(apiKeyMiddleware(cfg.Server.APIKey, cfg.Server.RequireAPIKey))
+
 	router.LoadHTMLGlob("web/templates/*")
 	router.Static("/static", "web/static")
 
 	router.GET("/", indexHandler)
+
+	// Real backend health endpoint. Registered outside /api so reverse proxies
+	// (nginx) and docker-compose healthchecks can rely on a stable path.
+	router.GET("/health", healthHandler)
 
 	api := router.Group("/api")
 	{
@@ -183,6 +205,7 @@ func main() {
 
 		// Diagnostics
 		api.GET("/debug/tables", getDebugTablesHandler)
+		api.GET("/debug/ingest-stats", ingestStatsHandler)
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -281,6 +304,10 @@ func receiveBatchEventsHandler(c *gin.Context) {
 	fileCount := 0
 	unknownCount := 0
 
+	// Track unique computers contributing successful events so we can update
+	// agent_configs.last_seen once per client per batch.
+	seenComputers := make(map[string]struct{})
+
 	for _, event := range req.Events {
 		switch event.Type {
 		case "activity":
@@ -297,6 +324,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
 
 			if err := json.Unmarshal(event.Data, &activityData); err != nil {
 				zapctx.Warn(ctx, "Failed to unmarshal activity event", zap.Error(err))
+				ingestStats.ParseError(event.Type, err)
 				continue
 			}
 
@@ -317,15 +345,22 @@ func receiveBatchEventsHandler(c *gin.Context) {
 			}
 
 			if activityEvent.ComputerName == "" || activityEvent.Username == "" {
+				ingestStats.Drop(event.Type)
 				continue
 			}
 			if activityEvent.Duration > 86400 {
+				ingestStats.Drop(event.Type)
 				continue
 			}
 
 			if err := db.InsertActivityEvent(ctx, activityEvent); err != nil {
 				zapctx.Warn(ctx, "Failed to insert activity event", zap.Error(err))
+				ingestStats.InsertError(event.Type, err)
 				continue
+			}
+			ingestStats.Accept(event.Type, activityEvent.ComputerName)
+			if activityEvent.ComputerName != "" {
+				seenComputers[activityEvent.ComputerName] = struct{}{}
 			}
 			activityCount++
 
@@ -333,6 +368,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
 			var seg database.ActivitySegment
 			if err := json.Unmarshal(event.Data, &seg); err != nil {
 				zapctx.Warn(ctx, "Failed to unmarshal activity_segment event", zap.Error(err))
+				ingestStats.ParseError(event.Type, err)
 				continue
 			}
 
@@ -360,7 +396,12 @@ func receiveBatchEventsHandler(c *gin.Context) {
 
 			if err := db.InsertActivitySegment(ctx, seg); err != nil {
 				zapctx.Warn(ctx, "Failed to insert activity segment", zap.Error(err))
+				ingestStats.InsertError(event.Type, err)
 				continue
+			}
+			ingestStats.Accept(event.Type, seg.ComputerName)
+			if seg.ComputerName != "" {
+				seenComputers[seg.ComputerName] = struct{}{}
 			}
 			activityCount++
 
@@ -368,6 +409,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
 			var keyboardData database.KeyboardEvent
 			if err := json.Unmarshal(event.Data, &keyboardData); err != nil {
 				zapctx.Warn(ctx, "Failed to unmarshal keyboard event", zap.Error(err))
+				ingestStats.ParseError(event.Type, err)
 				continue
 			}
 
@@ -380,7 +422,12 @@ func receiveBatchEventsHandler(c *gin.Context) {
 
 			if err := db.InsertKeyboardEvent(ctx, keyboardData); err != nil {
 				zapctx.Warn(ctx, "Failed to insert keyboard event", zap.Error(err))
+				ingestStats.InsertError(event.Type, err)
 				continue
+			}
+			ingestStats.Accept(event.Type, keyboardData.ComputerName)
+			if keyboardData.ComputerName != "" {
+				seenComputers[keyboardData.ComputerName] = struct{}{}
 			}
 			keyboardCount++
 
@@ -388,6 +435,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
 			var usbData database.USBEvent
 			if err := json.Unmarshal(event.Data, &usbData); err != nil {
 				zapctx.Warn(ctx, "Failed to unmarshal USB event", zap.Error(err))
+				ingestStats.ParseError(event.Type, err)
 				continue
 			}
 
@@ -400,7 +448,12 @@ func receiveBatchEventsHandler(c *gin.Context) {
 
 			if err := db.InsertUSBEvent(ctx, usbData); err != nil {
 				zapctx.Warn(ctx, "Failed to insert USB event", zap.Error(err))
+				ingestStats.InsertError(event.Type, err)
 				continue
+			}
+			ingestStats.Accept(event.Type, usbData.ComputerName)
+			if usbData.ComputerName != "" {
+				seenComputers[usbData.ComputerName] = struct{}{}
 			}
 			usbCount++
 
@@ -408,6 +461,7 @@ func receiveBatchEventsHandler(c *gin.Context) {
 			var fileData database.FileCopyEvent
 			if err := json.Unmarshal(event.Data, &fileData); err != nil {
 				zapctx.Warn(ctx, "Failed to unmarshal file event", zap.Error(err))
+				ingestStats.ParseError(event.Type, err)
 				continue
 			}
 
@@ -420,7 +474,12 @@ func receiveBatchEventsHandler(c *gin.Context) {
 
 			if err := db.InsertFileCopyEvent(ctx, fileData); err != nil {
 				zapctx.Warn(ctx, "Failed to insert file event", zap.Error(err))
+				ingestStats.InsertError(event.Type, err)
 				continue
+			}
+			ingestStats.Accept(event.Type, fileData.ComputerName)
+			if fileData.ComputerName != "" {
+				seenComputers[fileData.ComputerName] = struct{}{}
 			}
 			fileCount++
 
@@ -428,6 +487,13 @@ func receiveBatchEventsHandler(c *gin.Context) {
 			zapctx.Debug(ctx, "Unknown event type, ignoring", zap.String("type", event.Type))
 			unknownCount++
 		}
+	}
+
+	// Record a heartbeat for each unique computer that contributed a valid
+	// event to this batch. The helper is debounced so frequent batches do not
+	// flood agent_configs with ReplacingMergeTree inserts.
+	for computer := range seenComputers {
+		recordHeartbeat(ctx, computer)
 	}
 
 	totalProcessed := activityCount + keyboardCount + usbCount + fileCount
@@ -604,9 +670,20 @@ func receiveScreenshotHandler(c *gin.Context) {
 
 	if err := db.InsertScreenshotMetadata(ctx, meta); err != nil {
 		zapctx.Error(ctx, "Failed to insert screenshot metadata", zap.Error(err))
+		ingestStats.InsertError("screenshot", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save metadata"})
 		return
 	}
+
+	ingestStats.Accept("screenshot", screenshot.ComputerName)
+	recordHeartbeat(ctx, screenshot.ComputerName)
+
+	zapctx.Info(ctx, "Screenshot saved",
+		zap.String("computer", screenshot.ComputerName),
+		zap.String("username", screenshot.Username),
+		zap.String("screenshot_id", screenshot.ScreenshotID),
+		zap.Int64("size", screenshot.FileSize),
+	)
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "screenshot_id": screenshot.ScreenshotID})
 }

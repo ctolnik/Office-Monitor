@@ -107,6 +107,22 @@ func (s *Storage) GetObject(ctx context.Context, bucket, objectName string) (*mi
 	return object, nil
 }
 
+// Ping verifies that the MinIO endpoint is reachable and the screenshots
+// bucket exists. It is used by /health to surface storage degradation.
+func (s *Storage) Ping(ctx context.Context) error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+	exists, err := s.client.BucketExists(ctx, s.screenshotsBucket)
+	if err != nil {
+		return fmt.Errorf("bucket check failed: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("screenshots bucket missing: %s", s.screenshotsBucket)
+	}
+	return nil
+}
+
 func (s *Storage) GetPresignedURL(ctx context.Context, bucket, objectName string) (string, error) {
 	// Check if object exists before generating URL
 	_, err := s.client.StatObject(ctx, bucket, objectName, minio.StatObjectOptions{})
