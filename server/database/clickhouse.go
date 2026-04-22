@@ -202,10 +202,21 @@ func (db *Database) GetActiveEmployees(ctx context.Context) ([]Employee, error) 
 	return employees, rows.Err()
 }
 
+// GetRecentActivity returns the most recent activity rows. The underlying
+// data source is `activity_segments` because the legacy `activity_events`
+// table has been unused by the agent for months and reads from it always
+// return an empty payload. Segments are projected to the ActivityEvent
+// shape expected by the existing handler.
 func (db *Database) GetRecentActivity(ctx context.Context, limit int) ([]ActivityEvent, error) {
-	query := `SELECT timestamp, computer_name, username, window_title, process_name, duration
-                FROM monitoring.activity_events
-                ORDER BY timestamp DESC
+	query := `SELECT
+                        timestamp_start,
+                        computer_name,
+                        username,
+                        window_title,
+                        process_name,
+                        duration_sec
+                FROM monitoring.activity_segments
+                ORDER BY timestamp_start DESC
                 LIMIT ?`
 
 	rows, err := db.conn.Query(ctx, query, limit)

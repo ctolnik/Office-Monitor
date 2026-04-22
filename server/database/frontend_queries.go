@@ -10,18 +10,20 @@ import (
 	"go.uber.org/zap"
 )
 
-// GetAgents returns all agents with their status
+// GetAgents returns all agents with their status. It is sourced from
+// `activity_segments` (the live ingestion target) rather than the legacy
+// `activity_events` table which no longer receives data from the agent.
 func (db *Database) GetAgents(ctx context.Context) ([]Agent, error) {
 	query := `
-                SELECT 
+                SELECT
                         computer_name,
                         username,
-                        MAX(timestamp) as last_seen,
+                        MAX(timestamp_start) as last_seen,
                         '' as ip_address,
                         '' as os_version,
                         '' as agent_version
-                FROM monitoring.activity_events
-                WHERE timestamp > now() - INTERVAL 1 DAY
+                FROM monitoring.activity_segments
+                WHERE timestamp_start > now() - INTERVAL 1 DAY
                 GROUP BY computer_name, username
                 ORDER BY last_seen DESC`
 
@@ -191,12 +193,14 @@ func (db *Database) UpdateAgentHeartbeat(ctx context.Context, computerName strin
 		largeCopyThresholdMB, now, agentVersion, now)
 }
 
-// GetAllUsers returns all unique users from activity_events
+// GetAllUsers returns all unique users observed in the last 30 days. Sourced
+// from `activity_segments` to stay consistent with the live ingestion path.
 func (db *Database) GetAllUsers(ctx context.Context) ([]string, error) {
 	query := `
                 SELECT DISTINCT username
-                FROM monitoring.activity_events
-                WHERE timestamp > now() - INTERVAL 30 DAY
+                FROM monitoring.activity_segments
+                WHERE timestamp_start > now() - INTERVAL 30 DAY
+                  AND username != ''
                 ORDER BY username`
 
 	rows, err := db.conn.Query(ctx, query)
@@ -217,20 +221,23 @@ func (db *Database) GetAllUsers(ctx context.Context) ([]string, error) {
 	return users, rows.Err()
 }
 
-// GetAllEmployees returns all employees from employees table
+// GetAllEmployees returns all employees from employees table. The current
+// schema (see clickhouse/01-schema.sql) does not expose `consent_given` /
+// `consent_date` columns; older revisions of this query referenced them and
+// caused /api/employees/all to fail with HTTP 500 on every request. The
+// consent fields remain on the response model for frontend compatibility
+// but default to false/nil until the schema adds explicit consent storage.
 func (db *Database) GetAllEmployees(ctx context.Context) ([]EmployeeFull, error) {
 	query := `
-                SELECT 
+                SELECT
                         username,
                         full_name,
                         department,
                         position,
                         email,
-                        consent_given,
-                        consent_date,
                         created_at,
                         is_active
-                FROM monitoring.employees
+                FROM monitoring.employees FINAL
                 ORDER BY created_at DESC`
 
 	rows, err := db.conn.Query(ctx, query)
@@ -242,20 +249,17 @@ func (db *Database) GetAllEmployees(ctx context.Context) ([]EmployeeFull, error)
 	employees := make([]EmployeeFull, 0)
 	for rows.Next() {
 		var e EmployeeFull
-		var consentDate *time.Time
 		var createdAt time.Time
 
 		if err := rows.Scan(&e.Username, &e.FullName, &e.Department, &e.Position,
-			&e.Email, &e.ConsentGiven, &consentDate, &createdAt, &e.IsActive); err != nil {
+			&e.Email, &createdAt, &e.IsActive); err != nil {
 			continue
 		}
 
 		e.ID = e.Username // Use username as ID
 		e.CreatedAt = createdAt.Format(time.RFC3339)
-		if consentDate != nil {
-			dateStr := consentDate.Format(time.RFC3339)
-			e.ConsentDate = &dateStr
-		}
+		e.ConsentGiven = false
+		e.ConsentDate = nil
 
 		employees = append(employees, e)
 	}
@@ -263,48 +267,38 @@ func (db *Database) GetAllEmployees(ctx context.Context) ([]EmployeeFull, error)
 	return employees, rows.Err()
 }
 
-// CreateEmployee creates a new employee
+// CreateEmployee creates a new employee. Consent fields are accepted on the
+// API surface but not persisted yet (see GetAllEmployees).
 func (db *Database) CreateEmployee(ctx context.Context, emp EmployeeFull) error {
 	query := `
-                INSERT INTO monitoring.employees 
-                        (username, full_name, department, position, email, consent_given, consent_date, created_at, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, now(), ?)`
+                INSERT INTO monitoring.employees
+                        (username, full_name, department, position, email, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
-	var consentDate *time.Time
-	if emp.ConsentDate != nil {
-		t, _ := time.Parse(time.RFC3339, *emp.ConsentDate)
-		consentDate = &t
-	}
-
+	now := time.Now()
 	return db.conn.Exec(ctx, query,
 		emp.Username, emp.FullName, emp.Department, emp.Position,
-		emp.Email, emp.ConsentGiven, consentDate, emp.IsActive,
+		emp.Email, emp.IsActive, now, now,
 	)
 }
 
-// UpdateEmployee updates existing employee
+// UpdateEmployee updates existing employee. Consent fields are accepted on
+// the API surface but not persisted yet (see GetAllEmployees).
 func (db *Database) UpdateEmployee(ctx context.Context, username string, emp EmployeeFull) error {
 	query := `
-                ALTER TABLE monitoring.employees 
-                UPDATE 
+                ALTER TABLE monitoring.employees
+                UPDATE
                         full_name = ?,
                         department = ?,
                         position = ?,
                         email = ?,
-                        consent_given = ?,
-                        consent_date = ?,
-                        is_active = ?
+                        is_active = ?,
+                        updated_at = ?
                 WHERE username = ?`
-
-	var consentDate *time.Time
-	if emp.ConsentDate != nil {
-		t, _ := time.Parse(time.RFC3339, *emp.ConsentDate)
-		consentDate = &t
-	}
 
 	return db.conn.Exec(ctx, query,
 		emp.FullName, emp.Department, emp.Position, emp.Email,
-		emp.ConsentGiven, consentDate, emp.IsActive, username,
+		emp.IsActive, time.Now(), username,
 	)
 }
 
@@ -397,9 +391,10 @@ func (db *Database) GetDashboardStats(ctx context.Context) (*DashboardStats, err
 	}
 
 	// Average productivity calculation
-	// Get all active employees from last 7 days
+	// Get all active employees from last 7 days. Sourced from activity_segments
+	// because activity_events is no longer populated by the agent.
 	usernames := make([]string, 0)
-	userQuery := `SELECT DISTINCT username FROM monitoring.activity_events WHERE timestamp > ?`
+	userQuery := `SELECT DISTINCT username FROM monitoring.activity_segments WHERE timestamp_start > ? AND username != ''`
 	userRows, err := db.conn.Query(ctx, userQuery, weekAgo)
 	if err == nil {
 		defer userRows.Close()
@@ -464,7 +459,9 @@ func (db *Database) categorizeApplication(ctx context.Context, processName, wind
 	return category
 }
 
-// GetApplicationUsage returns application usage statistics
+// GetApplicationUsage returns application usage statistics. Prefers
+// `activity_segments` (sum of duration_sec) because the legacy
+// `activity_events` stream is no longer populated by the agent.
 func (db *Database) GetApplicationUsage(ctx context.Context, username string, start, end time.Time) ([]ApplicationUsage, error) {
 	// Format timestamps as strings without timezone to match ClickHouse local time
 	startStr := start.Format("2006-01-02 15:04:05")
@@ -476,17 +473,17 @@ func (db *Database) GetApplicationUsage(ctx context.Context, username string, st
 		zap.String("end", endStr))
 
 	// Use direct string interpolation for dates to avoid driver parameter conversion issues
-	// This is safe since timestamps are formatted from time.Time, not user input
+	// This is safe since timestamps are formatted from time.Time, not user input.
 	query := fmt.Sprintf(`
-                SELECT 
+                SELECT
                         process_name,
                         window_title,
-                        sum(duration) as total_duration,
+                        sum(duration_sec) as total_duration,
                         count(*) as count
-                FROM monitoring.activity_events
-                WHERE username = ? 
-                  AND timestamp >= toDateTime64('%s', 3)
-                  AND timestamp < toDateTime64('%s', 3)
+                FROM monitoring.activity_segments
+                WHERE username = ?
+                  AND timestamp_start >= toDateTime64('%s', 3)
+                  AND timestamp_start < toDateTime64('%s', 3)
                 GROUP BY process_name, window_title
                 ORDER BY total_duration DESC
                 LIMIT 50`, startStr, endStr)
@@ -707,18 +704,28 @@ func (db *Database) GetScreenshotsByUsername(ctx context.Context, username strin
 	return screenshots, nil
 }
 
-// GetActivityEventsByUsername returns activity events for user in time range
+// GetActivityEventsByUsername returns activity events for user in time
+// range. Derived from `activity_segments` because the legacy
+// `activity_events` stream is no longer populated by the agent. Fields not
+// present in the segment schema (process_path, idle_time) are returned as
+// empty/zero values to preserve the response shape for older clients.
 func (db *Database) GetActivityEventsByUsername(ctx context.Context, username string, start, end time.Time) ([]ActivityEvent, error) {
 	startStr := start.Format("2006-01-02 15:04:05")
 	endStr := end.Format("2006-01-02 15:04:05")
 
 	query := fmt.Sprintf(`
-                SELECT timestamp, computer_name, username, window_title, process_name, process_path, duration, idle_time
-                FROM monitoring.activity_events
-                WHERE username = ? 
-                  AND timestamp >= toDateTime64('%s', 3)
-                  AND timestamp < toDateTime64('%s', 3)
-                ORDER BY timestamp ASC
+                SELECT
+                        timestamp_start,
+                        computer_name,
+                        username,
+                        window_title,
+                        process_name,
+                        duration_sec
+                FROM monitoring.activity_segments
+                WHERE username = ?
+                  AND timestamp_start >= toDateTime64('%s', 3)
+                  AND timestamp_start < toDateTime64('%s', 3)
+                ORDER BY timestamp_start ASC
                 LIMIT 10000`, startStr, endStr)
 
 	rows, err := db.conn.Query(ctx, query, username)
@@ -731,16 +738,15 @@ func (db *Database) GetActivityEventsByUsername(ctx context.Context, username st
 	for rows.Next() {
 		var e ActivityEvent
 		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username,
-			&e.WindowTitle, &e.ProcessName, &e.ProcessPath,
-			&e.Duration, &e.IdleTime); err != nil {
-			zapctx.Error(ctx, "Failed to scan activity event row", zap.Error(err))
+			&e.WindowTitle, &e.ProcessName, &e.Duration); err != nil {
+			zapctx.Error(ctx, "Failed to scan activity segment row", zap.Error(err))
 			continue
 		}
 		events = append(events, e)
 	}
 
 	if err := rows.Err(); err != nil {
-		zapctx.Error(ctx, "Error iterating activity event rows", zap.Error(err))
+		zapctx.Error(ctx, "Error iterating activity segment rows", zap.Error(err))
 		return nil, err
 	}
 

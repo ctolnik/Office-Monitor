@@ -3,17 +3,25 @@ package database
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ctolnik/Office-Monitor/zapctx"
 	"go.uber.org/zap"
 )
 
-// GetSystemSettings returns all system settings as a map
+// The schema defined in `clickhouse/01-schema.sql` uses (key, value,
+// updated_at, updated_by) as columns. Earlier revisions of this file queried
+// columns that never existed in the table (setting_key, setting_value,
+// is_active), which caused `SELECT ... FROM monitoring.system_settings` to
+// fail with `Unknown expression identifier` on every /api/settings call.
+// All queries below have been realigned to the actual schema and rely on
+// ReplacingMergeTree semantics for the key column to make INSERTs idempotent.
+
+// GetSystemSettings returns all system settings as a map.
 func (db *Database) GetSystemSettings(ctx context.Context) (map[string]string, error) {
 	query := `
-		SELECT setting_key, setting_value
-		FROM monitoring.system_settings
-		WHERE is_active = 1`
+		SELECT key, value
+		FROM monitoring.system_settings FINAL`
 
 	rows, err := db.conn.Query(ctx, query)
 	if err != nil {
@@ -41,12 +49,12 @@ func (db *Database) GetSystemSettings(ctx context.Context) (map[string]string, e
 	return settings, nil
 }
 
-// GetSystemSetting returns a single system setting by key
+// GetSystemSetting returns a single system setting by key.
 func (db *Database) GetSystemSetting(ctx context.Context, key string) (string, error) {
 	query := `
-		SELECT setting_value
-		FROM monitoring.system_settings
-		WHERE setting_key = ? AND is_active = 1
+		SELECT value
+		FROM monitoring.system_settings FINAL
+		WHERE key = ?
 		LIMIT 1`
 
 	var value string
@@ -61,14 +69,16 @@ func (db *Database) GetSystemSetting(ctx context.Context, key string) (string, e
 	return value, nil
 }
 
-// UpdateSystemSetting updates or inserts a system setting
+// UpdateSystemSetting updates or inserts a system setting. The underlying
+// table is ReplacingMergeTree(updated_at) ordered by key, so repeated
+// INSERTs collapse to the latest version at merge time.
 func (db *Database) UpdateSystemSetting(ctx context.Context, key, value, updatedBy string) error {
 	query := `
-		INSERT INTO monitoring.system_settings 
-			(setting_key, setting_value, updated_by, updated_at, is_active)
-		VALUES (?, ?, ?, now(), 1)`
+		INSERT INTO monitoring.system_settings
+			(key, value, updated_at, updated_by)
+		VALUES (?, ?, ?, ?)`
 
-	err := db.conn.Exec(ctx, query, key, value, updatedBy)
+	err := db.conn.Exec(ctx, query, key, value, time.Now(), updatedBy)
 	if err != nil {
 		zapctx.Error(ctx, "Failed to update system setting",
 			zap.Error(err),
@@ -83,18 +93,19 @@ func (db *Database) UpdateSystemSetting(ctx context.Context, key, value, updated
 	return nil
 }
 
-// UpdateMultipleSettings updates multiple settings at once (batch operation)
+// UpdateMultipleSettings updates multiple settings at once (batch operation).
 func (db *Database) UpdateMultipleSettings(ctx context.Context, settings map[string]string, updatedBy string) error {
 	batch, err := db.conn.PrepareBatch(ctx, `
-		INSERT INTO monitoring.system_settings 
-			(setting_key, setting_value, updated_by, updated_at, is_active)`)
+		INSERT INTO monitoring.system_settings
+			(key, value, updated_at, updated_by)`)
 	if err != nil {
 		zapctx.Error(ctx, "Failed to prepare batch for settings update", zap.Error(err))
 		return err
 	}
 
+	now := time.Now()
 	for key, value := range settings {
-		if err := batch.Append(key, value, updatedBy, "now()", 1); err != nil {
+		if err := batch.Append(key, value, now, updatedBy); err != nil {
 			zapctx.Error(ctx, "Failed to append setting to batch",
 				zap.Error(err),
 				zap.String("key", key))
@@ -114,9 +125,10 @@ func (db *Database) UpdateMultipleSettings(ctx context.Context, settings map[str
 	return nil
 }
 
-// DeleteSystemSetting soft-deletes a system setting
+// DeleteSystemSetting removes a system setting. The table has no soft-delete
+// column, so this issues an async ClickHouse mutation to drop the row.
 func (db *Database) DeleteSystemSetting(ctx context.Context, key string) error {
-	query := `ALTER TABLE monitoring.system_settings UPDATE is_active = 0 WHERE setting_key = ?`
+	query := `ALTER TABLE monitoring.system_settings DELETE WHERE key = ?`
 
 	err := db.conn.Exec(ctx, query, key)
 	if err != nil {
