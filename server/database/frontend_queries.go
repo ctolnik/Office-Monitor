@@ -605,11 +605,13 @@ func (db *Database) GetFileEventsByUsername(ctx context.Context, username string
 	events := make([]FileCopyEvent, 0)
 	for rows.Next() {
 		var e FileCopyEvent
+		var isUSBTarget uint8
 		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username, &e.SourcePath,
-			&e.DestinationPath, &e.FileSize, &e.FileCount, &e.OperationType, &e.IsUSBTarget); err != nil {
+			&e.DestinationPath, &e.FileSize, &e.FileCount, &e.OperationType, &isUSBTarget); err != nil {
 			zapctx.Error(ctx, "Failed to scan file event row", zap.Error(err))
 			continue
 		}
+		e.IsUSBTarget = USBTargetFlag(isUSBTarget)
 		events = append(events, e)
 	}
 

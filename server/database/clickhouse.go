@@ -112,7 +112,7 @@ func (db *Database) InsertFileCopyEvent(ctx context.Context, event FileCopyEvent
 	return db.conn.Exec(ctx, query,
 		event.Timestamp, event.ComputerName, event.Username,
 		event.SourcePath, event.DestinationPath, event.FileSize,
-		event.FileCount, event.OperationType, event.IsUSBTarget)
+		event.FileCount, event.OperationType, uint8(event.IsUSBTarget))
 }
 
 func (db *Database) InsertScreenshotMetadata(ctx context.Context, meta ScreenshotMetadata) error {
@@ -269,9 +269,11 @@ func (db *Database) GetFileEvents(ctx context.Context, computerName string, from
 	events := make([]FileCopyEvent, 0)
 	for rows.Next() {
 		var e FileCopyEvent
-		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username, &e.SourcePath, &e.DestinationPath, &e.FileSize, &e.FileCount, &e.OperationType, &e.IsUSBTarget); err != nil {
+		var isUSBTarget uint8
+		if err := rows.Scan(&e.Timestamp, &e.ComputerName, &e.Username, &e.SourcePath, &e.DestinationPath, &e.FileSize, &e.FileCount, &e.OperationType, &isUSBTarget); err != nil {
 			continue
 		}
+		e.IsUSBTarget = USBTargetFlag(isUSBTarget)
 		events = append(events, e)
 	}
 

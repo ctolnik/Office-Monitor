@@ -77,15 +77,15 @@ type ProgramUsage struct {
 }
 
 type FileCopyEvent struct {
-	Timestamp       time.Time `json:"timestamp"`
-	ComputerName    string    `json:"computer_name"`
-	Username        string    `json:"username"`
-	SourcePath      string    `json:"source_path"`
-	DestinationPath string    `json:"destination_path"`
-	FileSize        uint64    `json:"file_size"`
-	FileCount       uint32    `json:"file_count"`
-	OperationType   string    `json:"operation_type"`
-	IsUSBTarget     uint8     `json:"is_usb_target"`
+	Timestamp       time.Time     `json:"timestamp"`
+	ComputerName    string        `json:"computer_name"`
+	Username        string        `json:"username"`
+	SourcePath      string        `json:"source_path"`
+	DestinationPath string        `json:"destination_path"`
+	FileSize        uint64        `json:"file_size"`
+	FileCount       uint32        `json:"file_count"`
+	OperationType   string        `json:"operation_type"`
+	IsUSBTarget     USBTargetFlag `json:"is_usb_target"`
 }
 
 type USBEvent struct {
